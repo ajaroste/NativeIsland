@@ -1,9 +1,12 @@
 #include "services/windows_notifications.hpp"
 #include "services/notification_icon_resolver.hpp"
+#include "core/com_ptr.hpp"
 #include <winrt/Windows.ApplicationModel.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.Storage.Streams.h>
 #include <thread>
+#include <wincodec.h>
+#include <shlwapi.h>
 #include <algorithm>
 #include <cwctype>
 #include <string_view>
@@ -62,6 +65,23 @@ WindowsNoticePresentation windows_notice_presentation(const WindowsNotice& notic
 }
 
 namespace {
+// Reject malformed or unrenderable WinRT logos: a non-empty stream is not
+// necessarily a usable bitmap. This allows the local Win32 shell fallback.
+bool renderable_logo(const std::vector<std::uint8_t>& bytes){
+  if(bytes.empty()||bytes.size()>512*1024)return false;
+  ComPtr<IWICImagingFactory> factory;
+  ComPtr<IWICBitmapDecoder> decoder;
+  ComPtr<IWICBitmapFrameDecode> frame;
+  ComPtr<IStream> stream;
+  stream.reset(SHCreateMemStream(reinterpret_cast<const BYTE*>(bytes.data()),static_cast<UINT>(bytes.size())));
+  if(!stream)return false;
+  if(FAILED(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,
+    __uuidof(IWICImagingFactory),reinterpret_cast<void**>(factory.put())))||
+     FAILED(factory->CreateDecoderFromStream(stream.get(),nullptr,WICDecodeMetadataCacheOnLoad,decoder.put()))||
+     FAILED(decoder->GetFrame(0,frame.put())))return false;
+  UINT w{},h{};
+  return SUCCEEDED(frame->GetSize(&w,&h))&&w>0&&h>0&&w<=512&&h<=512;
+}
 // Best effort and bounded: application logos are loaded in the background.
 void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
                     const std::wstring& app_id,
@@ -71,6 +91,8 @@ void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
   {
     std::scoped_lock lock(cache->mutex);
     if(cache->ready.contains(app_id)||cache->pending.contains(app_id))return;
+    if(auto failed=cache->failed_at.find(app_id);failed!=cache->failed_at.end()&&
+       std::chrono::steady_clock::now()-failed->second<std::chrono::minutes(5))return;
     if(cache->ready.size()+cache->pending.size()>=32||cache->pending.size()>=3)return;
     cache->pending.insert(app_id);
   }
@@ -94,11 +116,14 @@ void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
     }catch(...){bytes.clear();}
     // The WinRT logo may be absent for unpackaged desktop apps. Resolve the
     // shell's own identity icon without blocking the island's UI thread.
-    if(bytes.empty())bytes=notification_shell_icon(app_id,display_name);
+    if(!renderable_logo(bytes))bytes=notification_shell_icon(app_id,display_name);
+    const bool usable=bytes.size()>=12&&bytes[0]=='N'&&bytes[1]=='I'&&bytes[2]=='R'&&bytes[3]=='G';
+    if(!usable&&!renderable_logo(bytes))bytes.clear();
     auto result=std::make_shared<const std::vector<std::uint8_t>>(std::move(bytes));
     std::scoped_lock lock(cache->mutex);
     cache->pending.erase(app_id);
-    cache->ready.insert_or_assign(app_id,std::move(result));
+    if(!result->empty()){cache->failed_at.erase(app_id);cache->ready.insert_or_assign(app_id,std::move(result));}
+    else cache->failed_at.insert_or_assign(app_id,std::chrono::steady_clock::now());
   }).detach();
 }
 }

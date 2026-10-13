@@ -4,7 +4,7 @@
 
 namespace ni {
 // Windows does not supply notification layout measurements. Keep small alerts
-// narrow, and reserve two preview lines when message text is long.
+// narrow, with up to three readable preview lines for longer texts.
 struct CompactNoticeSize {int width{};int height{};};
 
 inline int notice_approx_width(std::wstring_view text,int latin_advance){
@@ -21,7 +21,11 @@ inline CompactNoticeSize compact_notice_size(std::wstring_view source,
   const int heading=std::max(notice_approx_width(source,7),notice_approx_width(title,9));
   const int preview=std::min(notice_approx_width(body,8),380);
   const int width=std::clamp(std::max(heading,preview)+112,336,500);
-  const bool wrap=!body.empty()&&notice_approx_width(body,8)>width-90;
-  return {width,body.empty()?76:(wrap?120:96)};
+  const int body_width=notice_approx_width(body,8);
+  const int line_width=width-90;
+  if(body.empty())return {width,76};
+  if(body_width<=line_width)return {width,96};
+  if(body_width<=line_width*2)return {width,120};
+  return {width,142};
 }
 }

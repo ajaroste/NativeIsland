@@ -25,7 +25,9 @@ inline int windows_notification_tests(){
   const auto hidden=ni::compact_notice_size(L"WhatsApp",L"Yeni bildirim",L"");
   if(hidden.height!=76||hidden.width<336)return 73;
   const auto long_notice=ni::compact_notice_size(L"WhatsApp",L"Arkadaş",std::wstring(220,L'x'));
-  if(long_notice.height!=120||long_notice.width>500)return 74;
+  if(long_notice.height!=142||long_notice.width>500)return 74;
+  const auto two_lines=ni::compact_notice_size(L"Vivaldi",L"Bir mesaj",std::wstring(62,L'x'));
+  if(two_lines.height!=120)return 75;
   auto config=ni::Config::parse("{\"windowsNotifications\":true,\"windowsNotificationContent\":false}");if(!config.windows_notifications||config.windows_notification_content||ni::Config{}.windows_notifications)return 67;
   return 0;
 }

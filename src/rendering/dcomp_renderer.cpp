@@ -84,6 +84,11 @@ void DCompRenderer::draw_notice_preview(const std::wstring& text,const D2D1_RECT
       DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,size,L"tr-TR",format.put())))return;
     format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
     format->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+    ComPtr<IDWriteInlineObject> ellipsis;
+    if(SUCCEEDED(dwrite_->CreateEllipsisTrimmingSign(format.get(),ellipsis.put()))){
+      DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_WORD,0,0};
+      format->SetTrimming(&trim,ellipsis.get());
+    }
   }
   format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
   brush_->SetColor(color);
@@ -237,7 +242,7 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
                 D2D1::RectF(x,title_y,w-18,title_y+25),15,D2D1::ColorF(view.theme.text));
       if(!view.notice_body.empty()){
         constexpr float body_y=59.f;
-        const float body_bottom=std::min(h-9.f,body_y+(h>=112.f?42.f:23.f));
+        const float body_bottom=std::min(h-12.f,body_y+(h>=140.f?69.f:(h>=112.f?47.f:25.f)));
         draw_notice_preview(view.notice_body,D2D1::RectF(x,body_y,w-18,body_bottom),
                             13,D2D1::ColorF(view.theme.text,.94f));
       }

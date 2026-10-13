@@ -11,6 +11,7 @@
 #include <mutex>
 #include <set>
 #include <cstdint>
+#include <chrono>
 
 namespace ni {
 struct WindowsNotice {uint32_t id{};int64_t created{};std::wstring app,title,body,app_id;};
@@ -18,6 +19,7 @@ struct NoticeLogoCache {
   mutable std::mutex mutex;
   std::map<std::wstring,std::shared_ptr<const std::vector<std::uint8_t>>> ready;
   std::set<std::wstring> pending;
+  std::map<std::wstring,std::chrono::steady_clock::time_point> failed_at;
 };
 // Source is the Windows-reported application identity, never an inferred web service.
 // Text is display-only: the notification listener cannot promise reply/open actions.
