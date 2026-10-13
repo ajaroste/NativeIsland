@@ -190,8 +190,9 @@ bool set_startup(bool enabled) {
     wchar_t exe[MAX_PATH]{};
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
     std::wstring value = L"\"" + std::wstring(exe) + L"\"";
-    wchar_t family[PACKAGE_FAMILY_NAME_MAX_LENGTH+1]{};UINT32 size=static_cast<UINT32>(std::size(family));
-    if(GetCurrentPackageFamilyName(&size,family)==ERROR_SUCCESS){wchar_t directory[MAX_PATH]{};GetWindowsDirectoryW(directory,MAX_PATH);value=L"\""+std::wstring(directory)+L"\\explorer.exe\" shell:AppsFolder\\"+family+L"!App";}
+    // Use the NativeIsland executable rather than explorer.exe shell activation.
+    // Explorer as the Run target is attributed to Windows Explorer in Startup Apps.
+
     ok = RegSetValueExW(key, L"NativeIsland", 0, REG_SZ,
       reinterpret_cast<const BYTE*>(value.c_str()), static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t))) == ERROR_SUCCESS;
   } else {
