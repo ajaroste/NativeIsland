@@ -36,6 +36,7 @@ private:
   std::wstring capture_path_;
   void draw_text(const std::wstring& text, const D2D1_RECT_F& rect, float size,
                  D2D1_COLOR_F color, DWRITE_TEXT_ALIGNMENT align = DWRITE_TEXT_ALIGNMENT_LEADING);
+  void update_notice_logo(const std::shared_ptr<const std::vector<std::uint8_t>>& bytes);
   void draw_notice_preview(const std::wstring& text,const D2D1_RECT_F& rect,float size,D2D1_COLOR_F color);
   void box(D2D1_RECT_F rect, float radius, unsigned color, float alpha = 1, bool outline = false);
   void icon(Icon icon, float x, float y, float size, unsigned color);
@@ -58,6 +59,8 @@ private:
   unsigned cached_accent_{},cached_background_{};
   std::map<int, ComPtr<IDWriteTextFormat>> formats_;
   std::map<int, ComPtr<IDWriteTextFormat>> notice_formats_;
+  std::shared_ptr<const std::vector<std::uint8_t>> notice_logo_source_;
+  ComPtr<ID2D1Bitmap1> notice_logo_bitmap_;
   ComPtr<ID2D1Bitmap1> artwork_;
   std::map<std::wstring,ComPtr<ID2D1Bitmap1>> app_icons_;
   std::map<std::wstring,ComPtr<ID2D1Bitmap1>> file_icons_;

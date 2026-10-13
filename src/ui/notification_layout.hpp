@@ -18,10 +18,10 @@ inline int notice_approx_width(std::wstring_view text,int latin_advance){
 inline CompactNoticeSize compact_notice_size(std::wstring_view source,
                                              std::wstring_view title,
                                              std::wstring_view body){
-  const int heading=std::max(notice_approx_width(source,6),notice_approx_width(title,7));
-  const int preview=std::min(notice_approx_width(body,6),360);
-  const int width=std::clamp(std::max(heading,preview)+104,312,488);
-  const bool wrap=!body.empty()&&notice_approx_width(body,6)>width-95;
-  return {width,body.empty()?68:(wrap?104:84)};
+  const int heading=std::max(notice_approx_width(source,7),notice_approx_width(title,9));
+  const int preview=std::min(notice_approx_width(body,8),380);
+  const int width=std::clamp(std::max(heading,preview)+112,336,500);
+  const bool wrap=!body.empty()&&notice_approx_width(body,8)>width-90;
+  return {width,body.empty()?76:(wrap?120:96)};
 }
 }

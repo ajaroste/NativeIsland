@@ -9,6 +9,8 @@
 #include <d2d1.h>
 #include <vector>
 #include <string>
+#include <memory>
+#include <cstdint>
 
 namespace ni {
 inline constexpr int shadow_padding=16;
@@ -29,6 +31,7 @@ struct ViewModel {
   std::wstring calendar_status;
   std::wstring clipboard_query,notice;
   std::wstring notice_app,notice_title,notice_body;
+  std::shared_ptr<const std::vector<std::uint8_t>> notice_logo;
   std::vector<size_t> clipboard_indices;
   int notice_kind{};
   float notice_age{},notice_value{};

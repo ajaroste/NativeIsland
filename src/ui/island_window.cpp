@@ -732,6 +732,7 @@ void IslandWindow::update_clipboard() {
 void IslandWindow::clear_windows_notice(){
   if(view_.notice_kind!=8)return;
   view_.notice.clear();view_.notice_app.clear();view_.notice_title.clear();view_.notice_body.clear();
+  view_.notice_logo.reset();windows_notice_app_id_.clear();
   windows_notice_id_=0;KillTimer(window_,kNotice);
 }
 void IslandWindow::windows_notification_events(){
@@ -746,8 +747,14 @@ void IslandWindow::windows_notification_events(){
   for(auto& notice:incoming){if(windows_notice_queue_.size()==20)windows_notice_queue_.pop_front();windows_notice_queue_.push_back(std::move(notice));}
   std::erase_if(windows_notice_queue_,[this](const auto& n){return !windows_notifications_.contains(n.id);});
   if(view_.notice_kind==8&&!view_.notice.empty()&&!windows_notifications_.contains(windows_notice_id_)){clear_windows_notice();resize_for_content();render();}
+  if(view_.notice_kind==8&&!view_.notice.empty()){
+    auto logo=windows_notifications_.logo_for(windows_notice_app_id_);
+    if(logo!=view_.notice_logo){view_.notice_logo=std::move(logo);render();}
+  }
   if(!view_.notice.empty()||windows_notice_queue_.empty())return;
-  auto item=std::move(windows_notice_queue_.front());windows_notice_queue_.pop_front();windows_notice_id_=item.id;
+  auto item=std::move(windows_notice_queue_.front());windows_notice_queue_.pop_front();
+  windows_notice_id_=item.id;windows_notice_app_id_=item.app_id;
+  view_.notice_logo=windows_notifications_.logo_for(windows_notice_app_id_);
   const auto presentation=windows_notice_presentation(item,config_.windows_notification_content);
   view_.notice_app=presentation.source;view_.notice_title=presentation.title;view_.notice_body=presentation.preview;
   view_.notice=view_.notice_app+L" · "+view_.notice_title;view_.notice_kind=8;view_.notice_age=0;

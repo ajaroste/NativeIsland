@@ -1,6 +1,8 @@
 #include "services/windows_notifications.hpp"
 #include <winrt/Windows.ApplicationModel.h>
 #include <winrt/Windows.System.h>
+#include <winrt/Windows.Storage.Streams.h>
+#include <thread>
 #include <algorithm>
 #include <cwctype>
 #include <string_view>
@@ -58,6 +60,43 @@ WindowsNoticePresentation windows_notice_presentation(const WindowsNotice& notic
   return result;
 }
 
+namespace {
+// Best effort and bounded: application logos are loaded in the background.
+void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
+                    const std::wstring& app_id,
+                    winrt::Windows::ApplicationModel::AppInfo app){
+  if(app_id.empty()||!app)return;
+  {
+    std::scoped_lock lock(cache->mutex);
+    if(cache->ready.contains(app_id)||cache->pending.contains(app_id))return;
+    if(cache->ready.size()+cache->pending.size()>=32||cache->pending.size()>=3)return;
+    cache->pending.insert(app_id);
+  }
+  std::thread([cache,app_id,app=std::move(app)]() mutable {
+    std::vector<std::uint8_t> bytes;
+    try {
+      winrt::init_apartment(winrt::apartment_type::multi_threaded);
+      auto logo=app.DisplayInfo().GetLogo(winrt::Windows::Foundation::Size{64.f,64.f});
+      if(logo){
+        auto stream=logo.OpenReadAsync().get();
+        const auto size=stream.Size();
+        if(size>0&&size<=512*1024){
+          winrt::Windows::Storage::Streams::DataReader reader(stream.GetInputStreamAt(0));
+          const auto loaded=reader.LoadAsync(static_cast<std::uint32_t>(size)).get();
+          if(loaded==size){
+            bytes.resize(loaded);
+            reader.ReadBytes(winrt::array_view<std::uint8_t>(bytes));
+          }
+        }
+      }
+    }catch(...){bytes.clear();}
+    auto result=std::make_shared<const std::vector<std::uint8_t>>(std::move(bytes));
+    std::scoped_lock lock(cache->mutex);
+    cache->pending.erase(app_id);
+    cache->ready.insert_or_assign(app_id,std::move(result));
+  }).detach();
+}
+}
 void WindowsNotifications::clear(){
   try{if(query_)query_.Cancel();if(access_)access_.Cancel();}catch(...){}
   query_=nullptr;access_=nullptr;incoming_.clear();delta_.reset();
@@ -87,18 +126,30 @@ void WindowsNotifications::poll(){
       auto op=query_;query_=nullptr;
       if(op.Status()!=AsyncStatus::Completed){status_=L"Windows bildirimleri okunamadı; erişim iznini kontrol edin.";return;}
       std::vector<WindowsNotice> current;
+      std::map<std::wstring,winrt::Windows::ApplicationModel::AppInfo> apps;
       for(const auto& item:op.GetResults())try{
         auto binding=item.Notification().Visual().GetBinding(KnownNotificationBindings::ToastGeneric());if(!binding)continue;
         WindowsNotice n;n.id=item.Id();n.created=item.CreationTime().time_since_epoch().count();
-        n.app=item.AppInfo().DisplayInfo().DisplayName();if(std::wstring(item.AppInfo().AppUserModelId()).find(L"NativeIsland")!=std::wstring::npos)continue;
+        auto info=item.AppInfo();
+        n.app=info.DisplayInfo().DisplayName();n.app_id=info.AppUserModelId();
+        if(n.app_id.find(L"NativeIsland")!=std::wstring::npos)continue;
+        if(!n.app_id.empty())apps.insert_or_assign(n.app_id,info);
         for(const auto& text:binding.GetTextElements()){if(n.title.empty())n.title=text.Text();else{if(!n.body.empty())n.body+=L" · ";n.body+=text.Text();}if(n.body.size()>1024)break;}
         if(!n.title.empty()||!n.body.empty())current.push_back(std::move(n));
       }catch(...){} // A malformed toast must not disable all other apps.
-      incoming_=delta_.update(current);status_=L"İzin verildi · Yeni Windows bildirimleri adada gösterilir.";
+      incoming_=delta_.update(current);
+      for(const auto& n:incoming_){auto it=apps.find(n.app_id);if(it!=apps.end())queue_app_logo(logo_cache_,n.app_id,it->second);}
+      status_=L"İzin verildi · Yeni Windows bildirimleri adada gösterilir.";
     }
     query_=listener_.GetNotificationsAsync(NotificationKinds::Toast);
   }catch(const winrt::hresult_error&){clear();status_=L"Windows erişimi kullanılamıyor. Bildirim yeteneği olan MSIX paketi gerekli olabilir.";}
   catch(...){clear();status_=L"Windows bildirimleri geçici olarak okunamıyor.";}
+}
+std::shared_ptr<const std::vector<std::uint8_t>> WindowsNotifications::logo_for(const std::wstring& app_id)const{
+  if(app_id.empty())return {};
+  std::scoped_lock lock(logo_cache_->mutex);
+  auto it=logo_cache_->ready.find(app_id);
+  return it==logo_cache_->ready.end()?nullptr:it->second;
 }
 std::vector<WindowsNotice> WindowsNotifications::take(){auto out=std::move(incoming_);incoming_.clear();return out;}
 }

@@ -64,6 +64,7 @@ private:
   WindowsNotifications windows_notifications_;
   std::deque<WindowsNotice> windows_notice_queue_;
   uint32_t windows_notice_id_{};
+  std::wstring windows_notice_app_id_;
   HINSTANCE instance_{}; HWND window_{}; UINT dpi_{96};
   TaskEntryWindow task_entry_;
   std::optional<HitTarget> pressed_target_;
