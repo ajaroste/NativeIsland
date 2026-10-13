@@ -15,6 +15,11 @@
 
 namespace ni {
 struct WindowsNotice {uint32_t id{};int64_t created{};std::wstring app,title,body,app_id;};
+// A legacy Win32 notification can have a display name but no AUMID.
+inline std::wstring notification_icon_key(const std::wstring& app_id,const std::wstring& display_name){
+  if(!app_id.empty())return app_id;
+  return display_name.empty()?L"":L"@desktop:"+display_name;
+}
 struct NoticeLogoCache {
   mutable std::mutex mutex;
   std::map<std::wstring,std::shared_ptr<const std::vector<std::uint8_t>>> ready;

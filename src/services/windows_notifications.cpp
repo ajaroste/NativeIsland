@@ -116,7 +116,10 @@ void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
     }catch(...){bytes.clear();}
     // The WinRT logo may be absent for unpackaged desktop apps. Resolve the
     // shell's own identity icon without blocking the island's UI thread.
-    if(!renderable_logo(bytes))bytes=notification_shell_icon(app_id,display_name);
+    if(!renderable_logo(bytes)){
+      const auto actual_id=app_id.starts_with(L"@desktop:")?std::wstring{}:app_id;
+      bytes=notification_shell_icon(actual_id,display_name);
+    }
     const bool usable=bytes.size()>=12&&bytes[0]=='N'&&bytes[1]=='I'&&bytes[2]=='R'&&bytes[3]=='G';
     if(!usable&&!renderable_logo(bytes))bytes.clear();
     auto result=std::make_shared<const std::vector<std::uint8_t>>(std::move(bytes));
@@ -161,8 +164,10 @@ void WindowsNotifications::poll(){
         auto binding=item.Notification().Visual().GetBinding(KnownNotificationBindings::ToastGeneric());if(!binding)continue;
         WindowsNotice n;n.id=item.Id();n.created=item.CreationTime().time_since_epoch().count();
         auto info=item.AppInfo();
-        n.app=info.DisplayInfo().DisplayName();n.app_id=info.AppUserModelId();
-        if(n.app_id.find(L"NativeIsland")!=std::wstring::npos)continue;
+        n.app=info.DisplayInfo().DisplayName();
+        const std::wstring actual_id=info.AppUserModelId();
+        if(actual_id.find(L"NativeIsland")!=std::wstring::npos)continue;
+        n.app_id=notification_icon_key(actual_id,n.app);
         if(!n.app_id.empty())apps.insert_or_assign(n.app_id,info);
         for(const auto& text:binding.GetTextElements()){if(n.title.empty())n.title=text.Text();else{if(!n.body.empty())n.body+=L" · ";n.body+=text.Text();}if(n.body.size()>1024)break;}
         if(!n.title.empty()||!n.body.empty())current.push_back(std::move(n));

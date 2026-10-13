@@ -28,6 +28,9 @@ inline int windows_notification_tests(){
   if(long_notice.height!=142||long_notice.width>500)return 74;
   const auto two_lines=ni::compact_notice_size(L"Vivaldi",L"Bir mesaj",std::wstring(62,L'x'));
   if(two_lines.height!=120)return 75;
+  if(ni::notification_icon_key(L"Foo.AUMID",L"Vivaldi")!=L"Foo.AUMID")return 76;
+  if(ni::notification_icon_key(L"",L"Vivaldi")!=L"@desktop:Vivaldi")return 77;
+  if(!ni::notification_icon_key(L"",L"").empty())return 78;
   auto config=ni::Config::parse("{\"windowsNotifications\":true,\"windowsNotificationContent\":false}");if(!config.windows_notifications||config.windows_notification_content||ni::Config{}.windows_notifications)return 67;
   return 0;
 }
