@@ -165,7 +165,7 @@ void WindowsNotifications::poll(){
         WindowsNotice n;n.id=item.Id();n.created=item.CreationTime().time_since_epoch().count();
         auto info=item.AppInfo();
         n.app=info.DisplayInfo().DisplayName();
-        const std::wstring actual_id=info.AppUserModelId();
+        const std::wstring actual_id(info.AppUserModelId());
         if(actual_id.find(L"NativeIsland")!=std::wstring::npos)continue;
         n.app_id=notification_icon_key(actual_id,n.app);
         if(!n.app_id.empty())apps.insert_or_assign(n.app_id,info);
