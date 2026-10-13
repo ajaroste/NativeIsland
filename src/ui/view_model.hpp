@@ -28,7 +28,7 @@ struct ViewModel {
   bool has_today_reminders{};
   std::wstring calendar_status;
   std::wstring clipboard_query,notice;
-  std::wstring notice_app;
+  std::wstring notice_app,notice_title,notice_body;
   std::vector<size_t> clipboard_indices;
   int notice_kind{};
   float notice_age{},notice_value{};

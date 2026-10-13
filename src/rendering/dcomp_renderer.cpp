@@ -152,8 +152,23 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
     float pulse=!view.reduced_motion&&(view.notice_kind==2||view.notice_kind==3||view.notice_kind==6||view.notice_kind==7)?2*std::sin(std::min(view.notice_age/.4f,1.f)*3.14159f):0;
     unsigned color=view.notice_kind==1?0xef4444:view.notice_kind==3?0xf5a524:view.theme.accent;
     icon(symbol,20-pulse/2,y+7-pulse/2,18+pulse,color);if(view.notice_kind==1){brush_->SetColor(D2D1::ColorF(color));context_->DrawLine(D2D1::Point2F(19,y+6),D2D1::Point2F(38,y+25),brush_.get(),2);}
-    if(view.notice_kind==8&&progress<=.15f){draw_text(view.notice_app.empty()?L"Windows bildirimi":view.notice_app,D2D1::RectF(46,3,w-18,27),12,D2D1::ColorF(view.theme.accent));draw_text(view.notice,D2D1::RectF(46,27,w-18,56),11,D2D1::ColorF(view.theme.text));}
-    else draw_text(view.notice,D2D1::RectF(46,y,w-18,y+30),11,D2D1::ColorF(view.theme.text));
+    if(view.notice_kind==8&&progress<=.15f){
+      // Uniform card for any Windows source (desktop app, browser, PWA, system).
+      // The browser name stays the browser name; don't fabricate website branding.
+      const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
+      box(D2D1::RectF(17,23,61,67),14,view.theme.accent_soft);
+      const wchar_t initial=source.empty()?L'\0':source.front();
+      if((initial>=L'A'&&initial<=L'Z')||(initial>=L'a'&&initial<=L'z')||(initial>=L'0'&&initial<=L'9')){
+        wchar_t upper=initial>=L'a'&&initial<=L'z'?static_cast<wchar_t>(initial-L'a'+L'A'):initial;
+        draw_text(std::wstring(1,upper),D2D1::RectF(17,23,61,67),18,D2D1::ColorF(view.theme.accent),DWRITE_TEXT_ALIGNMENT_CENTER);
+      }else icon(Icon::bell,28,34,22,view.theme.accent);
+      draw_text(source,D2D1::RectF(75,8,w-18,30),11,D2D1::ColorF(view.theme.accent));
+      draw_text(view.notice_title.empty()?L"Yeni bildirim":view.notice_title,D2D1::RectF(75,31,w-18,54),13,D2D1::ColorF(view.theme.text));
+      if(!view.notice_body.empty())draw_text(view.notice_body,D2D1::RectF(75,55,w-18,80),11,D2D1::ColorF(view.theme.secondary));
+    }else if(view.notice_kind==8){
+      const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
+      draw_text(source+L" · "+(view.notice_title.empty()?L"Yeni bildirim":view.notice_title),D2D1::RectF(46,y,w-18,y+30),11,D2D1::ColorF(view.theme.text));
+    }else draw_text(view.notice,D2D1::RectF(46,y,w-18,y+30),11,D2D1::ColorF(view.theme.text));
     if(view.notice_kind==0)box(D2D1::RectF(47,y+31,47+(w-65)*view.notice_value,y+33),1,view.theme.accent);
     context_->PopLayer();
   }

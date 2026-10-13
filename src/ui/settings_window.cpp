@@ -117,7 +117,7 @@ void SettingsWindow::populate() {
   control(L"BUTTON",L"Erişim izni ver",BS_PUSHBUTTON|WS_TABSTOP,297,224,252,200,36);
   control(L"BUTTON",L"Windows bildirim ayarları",BS_PUSHBUTTON|WS_TABSTOP,298,438,252,258,36);
   control(L"STATIC",L"",0,299,224,310,472,64);
-  control(L"STATIC",L"WhatsApp ve diğer uygulamaların yeni bildirimleri 6 saniye görünür.\nEski bildirimler tekrar gösterilmez. İçerikler dosyaya kaydedilmez.\nİçeriği gizleyerek yalnızca uygulama adını gösterebilirsin.\nWindows'un kendi bildirimleri silinmez veya kapatılmaz.",0,0,224,390,472,118);
+  control(L"STATIC",L"Tüm uygulamaların yeni Windows bildirimleri 8 saniye görünür.\nEski bildirimler tekrar gösterilmez. İçerikler dosyaya kaydedilmez.\nİçeriği gizleyerek yalnızca uygulama adını gösterebilirsin.\nWindows'un kendi bildirimleri silinmez veya kapatılmaz.",0,0,224,390,472,118);
   group=5;
   control(L"STATIC",L"Çan yanındaki görev ikonundan görevlerini gör, ekle ve tamamla.",0,0,224,158,472,26);
   control(L"BUTTON",L"Tasks izni ver",BS_PUSHBUTTON|WS_TABSTOP,301,224,200,220,36);

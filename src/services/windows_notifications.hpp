@@ -10,6 +10,10 @@
 
 namespace ni {
 struct WindowsNotice {uint32_t id{};int64_t created{};std::wstring app,title,body;};
+// Source is the Windows-reported application identity, never an inferred web service.
+// Text is display-only: the notification listener cannot promise reply/open actions.
+struct WindowsNoticePresentation {std::wstring source,title,preview;};
+WindowsNoticePresentation windows_notice_presentation(const WindowsNotice& notice,bool show_content);
 // No notification content is persisted. Initial history is only a baseline.
 class NotificationDelta {
 public:

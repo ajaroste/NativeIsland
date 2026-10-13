@@ -298,11 +298,11 @@ int IslandWindow::export_previews(const std::filesystem::path& directory) {
   renderer_.capture_next((directory/L"reminders-days-empty.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 54;
   report<<"PASS reminder day navigation and selected-date entry\n";
   view.page=Page::clipboard;view.clipboard_query=L"uzun";view.height=238;renderer_.resize(dip_to_px(532,dpi_),dip_to_px(270,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"clipboard-search.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 24;
-  view.expansion=0;view.notice=L"WhatsApp · Emir · Toplantı 15 dakika sonra başlıyor.";view.notice_app=L"WhatsApp";view.notice_kind=8;view.notice_age=1;
-  renderer_.resize(dip_to_px(452,dpi_),dip_to_px(96,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"notice-windows.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 58;
+  view.expansion=0;view.notice=L"Vivaldi · Yeni yorum";view.notice_app=L"Vivaldi";view.notice_title=L"Yeni yorum";view.notice_body=L"Tasarım dokümanındaki değişiklikleri incele.";view.notice_kind=8;view.notice_age=1;
+  renderer_.resize(dip_to_px(508,dpi_),dip_to_px(124,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"notice-windows.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 58;
   const bool motion_before=config_.reduced_motion;config_.reduced_motion=true;
   view_.notice=L"Windows notification regression";view_.notice_kind=8;set_expanded(false);
-  if(static_cast<int>(width_.value())!=dip_to_px(420,dpi_)||static_cast<int>(height_.value())!=dip_to_px(64,dpi_))return 59;
+  if(static_cast<int>(width_.value())!=dip_to_px(476,dpi_)||static_cast<int>(height_.value())!=dip_to_px(92,dpi_))return 59;
   notice_deadline_=std::chrono::steady_clock::now()-std::chrono::seconds(1);handle(WM_TIMER,kNotice,0);
   if(!view_.notice.empty()||static_cast<int>(width_.value())!=dip_to_px(config_.collapsed_width,dpi_)||static_cast<int>(height_.value())!=dip_to_px(config_.collapsed_height,dpi_))return 59;
   config_.reduced_motion=motion_before;
@@ -336,7 +336,7 @@ LRESULT IslandWindow::handle(UINT message, WPARAM wparam, LPARAM lparam) {
     if(wparam==kWindowsNotifications){windows_notification_events();return 0;}
     if(wparam==kReminders){reminder_events();render();return 0;}
     if(wparam==kReminderDelivery){KillTimer(window_,kReminderDelivery);show_reminder_notice();return 0;}
-    if(wparam==kNotice){auto now=std::chrono::steady_clock::now();float remaining=std::chrono::duration<float>(notice_deadline_-now).count();view_.notice_age=remaining<.25f?2.6f-remaining:std::min(2.35f,std::chrono::duration<float>(now-notice_start_).count());if(remaining<=0){view_.notice.clear();KillTimer(window_,kNotice);resize_for_content();if(reminder_summary_open_){reminder_summary_open_=false;schedule_collapse();}}render();return 0;}
+    if(wparam==kNotice){auto now=std::chrono::steady_clock::now();float remaining=std::chrono::duration<float>(notice_deadline_-now).count();view_.notice_age=remaining<.25f?2.6f-remaining:std::min(2.35f,std::chrono::duration<float>(now-notice_start_).count());if(remaining<=0){if(view_.notice_kind==8)clear_windows_notice();else{view_.notice.clear();KillTimer(window_,kNotice);}resize_for_content();if(reminder_summary_open_){reminder_summary_open_=false;schedule_collapse();}}render();return 0;}
     if(wparam==kAutoExit){DestroyWindow(window_);return 0;}
     if(wparam==kWaves) {
       auto now=std::chrono::steady_clock::now();float dt=std::chrono::duration<float>(now-wave_frame_).count();wave_frame_=now;
@@ -484,7 +484,8 @@ void IslandWindow::render() {
   const float collapsed = static_cast<float>(dip_to_px(config_.collapsed_height, dpi_));
   const float expanded = static_cast<float>(dip_to_px(expanded_height(), dpi_));
   const float progress = expanded > collapsed ? std::clamp((height_.value() - collapsed) / (expanded - collapsed), 0.0f, 1.0f) : 0.0f;
-  view_.expansion=progress;view_.theme=theme_for(config_.theme_index,config_.custom_accent);
+  // A taller compact Windows notice must not expose the expanded island pages.
+  view_.expansion=(!expanded_&&view_.notice_kind==8&&!view_.notice.empty())?0.f:progress;view_.theme=theme_for(config_.theme_index,config_.custom_accent);
   if(config_.follow_system_theme) {
     DWORD light=0,size=sizeof(light);RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);
     view_.theme=theme_for(light?5:0,config_.custom_accent);
@@ -509,9 +510,9 @@ void IslandWindow::set_expanded(bool expanded, bool pin) {
   KillTimer(window_, kCollapseDelay);
   expanded_ = expanded;
   const bool toast=!view_.notice.empty()&&view_.notice_kind==8;
-  planned_height_=expanded?expanded_height():toast?64:config_.collapsed_height;
+  planned_height_=expanded?expanded_height():toast?92:config_.collapsed_height;
   state_ = expanded ? (pin ? State::pinned : State::expanding) : State::collapsing;
-  const float target_width = static_cast<float>(dip_to_px(expanded ? std::max(500,config_.expanded_width) : toast?420:config_.collapsed_width, dpi_));
+  const float target_width = static_cast<float>(dip_to_px(expanded ? std::max(500,config_.expanded_width) : toast?476:config_.collapsed_width, dpi_));
   const float target_height = static_cast<float>(dip_to_px(planned_height_, dpi_));
   float seconds=config_.animation_duration_ms/1000.f;
   if(config_.animation_style==2)seconds*=.65f;
@@ -578,7 +579,7 @@ int IslandWindow::expanded_height()const {
   const size_t count=view_.page==Page::sound?audio_.snapshot().sessions.size():view_.page==Page::tasks?google_calendar_.snapshot().tasks.size():view_.page==Page::reminders?reminders_for_day(reminders_.snapshot(),reminder_day_at_offset(reminder_now(),view_.reminder_offset),true).size():view_.page==Page::applications?apps_.snapshot().size():files_.size();
   return page_height(view_.page,count,clipboard_matches(clipboard_,view_.clipboard_query).size(),config_.clipboard_history,bluetooth)+(view_.notice.empty()?0:34);
 }
-void IslandWindow::resize_for_content(){if(expanded_&&planned_height_!=expanded_height())set_expanded(true,state_==State::pinned);else if(!expanded_&&planned_height_!=(!view_.notice.empty()&&view_.notice_kind==8?64:config_.collapsed_height))set_expanded(false);}
+void IslandWindow::resize_for_content(){if(expanded_&&planned_height_!=expanded_height())set_expanded(true,state_==State::pinned);else if(!expanded_&&planned_height_!=(!view_.notice.empty()&&view_.notice_kind==8?92:config_.collapsed_height))set_expanded(false);}
 void IslandWindow::update_media_animation() {
   auto snapshot=media_.snapshot();
   const bool visible=!manually_hidden_&&!hidden_for_fullscreen_&&(!expanded_||view_.page==Page::media);
@@ -696,9 +697,9 @@ void IslandWindow::activate(const HitTarget& target,float x) {
 
 void IslandWindow::apply_settings() {
   if(!verification_)windows_notifications_.enable(config_.windows_notifications);
-  if(!config_.windows_notifications){windows_notice_queue_.clear();if(view_.notice_kind==8){view_.notice.clear();KillTimer(window_,kNotice);}}
-  else if(!config_.windows_notification_content&&view_.notice_kind==8){view_.notice.clear();KillTimer(window_,kNotice);}
-  if(!config_.smart_notifications){view_.notice.clear();KillTimer(window_,kNotice);}
+  if(!config_.windows_notifications){windows_notice_queue_.clear();clear_windows_notice();}
+  else if(!config_.windows_notification_content)clear_windows_notice();
+  if(!config_.smart_notifications){clear_windows_notice();view_.notice.clear();KillTimer(window_,kNotice);}
   if(expire_clipboard(clipboard_,GetTickCount64(),config_.clipboard_ttl_minutes,config_.expire_pinned_clips)){++clipboard_revision_;view_.scroll=0;}
   if(!config_.pin_on_click&&state_==State::pinned)state_=State::expanded;
   if(!verification_){UnregisterHotKey(window_,1);if(config_.hotkey_key&&!RegisterHotKey(window_,1,config_.hotkey_modifiers|MOD_NOREPEAT,config_.hotkey_key))MessageBoxW(window_,L"Kısayol kullanımda. Başka bir kombinasyon seçin.",L"NativeIsland",MB_OK|MB_ICONWARNING);}
@@ -715,23 +716,30 @@ void IslandWindow::update_clipboard() {
     while(clipboard_.size()>100||bytes()>64*1024*1024){auto old=std::find_if(clipboard_.begin(),clipboard_.end(),[](auto& clip){return !clip.pinned;});if(old==clipboard_.end())break;clipboard_.erase(old);}}
   resize_for_content();render();
 }
+void IslandWindow::clear_windows_notice(){
+  if(view_.notice_kind!=8)return;
+  view_.notice.clear();view_.notice_app.clear();view_.notice_title.clear();view_.notice_body.clear();
+  windows_notice_id_=0;KillTimer(window_,kNotice);
+}
 void IslandWindow::windows_notification_events(){
   if(verification_||!config_.windows_notifications)return;
   // Never expose message content on a locked/noninteractive desktop.
   bool interactive=false;HDESK desktop=OpenInputDesktop(0,FALSE,DESKTOP_READOBJECTS);
   if(desktop){wchar_t name[128]{};DWORD bytes{};interactive=GetUserObjectInformationW(desktop,UOI_NAME,name,sizeof(name),&bytes)&&_wcsicmp(name,L"Default")==0;CloseDesktop(desktop);}
-  if(!interactive){windows_notifications_.enable(false);windows_notice_queue_.clear();if(view_.notice_kind==8){view_.notice.clear();KillTimer(window_,kNotice);resize_for_content();render();}return;}
+  if(!interactive){windows_notifications_.enable(false);windows_notice_queue_.clear();if(view_.notice_kind==8){clear_windows_notice();resize_for_content();render();}return;}
   windows_notifications_.enable(true);windows_notifications_.poll();
   auto incoming=windows_notifications_.take();
   if(manually_hidden_||hidden_for_fullscreen_){windows_notice_queue_.clear();return;}
   for(auto& notice:incoming){if(windows_notice_queue_.size()==20)windows_notice_queue_.pop_front();windows_notice_queue_.push_back(std::move(notice));}
   std::erase_if(windows_notice_queue_,[this](const auto& n){return !windows_notifications_.contains(n.id);});
-  if(view_.notice_kind==8&&!view_.notice.empty()&&!windows_notifications_.contains(windows_notice_id_)){view_.notice.clear();KillTimer(window_,kNotice);resize_for_content();render();}
+  if(view_.notice_kind==8&&!view_.notice.empty()&&!windows_notifications_.contains(windows_notice_id_)){clear_windows_notice();resize_for_content();render();}
   if(!view_.notice.empty()||windows_notice_queue_.empty())return;
   auto item=std::move(windows_notice_queue_.front());windows_notice_queue_.pop_front();windows_notice_id_=item.id;
-  view_.notice_app=item.app;view_.notice=windows_notice_text(item,config_.windows_notification_content);view_.notice_kind=8;view_.notice_age=0;
-  notice_start_=std::chrono::steady_clock::now();notice_deadline_=notice_start_+std::chrono::seconds(6);
-  SetTimer(window_,kNotice,config_.reduced_motion?6000:16,nullptr);resize_for_content();render();
+  const auto presentation=windows_notice_presentation(item,config_.windows_notification_content);
+  view_.notice_app=presentation.source;view_.notice_title=presentation.title;view_.notice_body=presentation.preview;
+  view_.notice=view_.notice_app+L" · "+view_.notice_title;view_.notice_kind=8;view_.notice_age=0;
+  notice_start_=std::chrono::steady_clock::now();notice_deadline_=notice_start_+std::chrono::seconds(8);
+  SetTimer(window_,kNotice,config_.reduced_motion?8000:16,nullptr);resize_for_content();render();
 }
 void IslandWindow::open_reminders(){reminder_window_.open(instance_,window_,reminders_,[this]{reminder_events();resize_for_content();render();},reminder_day_at_offset(reminder_now(),view_.page==Page::reminders?view_.reminder_offset:0));}
 void IslandWindow::reminder_events(){
@@ -748,13 +756,14 @@ void IslandWindow::reminder_events(){
 void IslandWindow::show_reminder_notice(){
   if(reminder_notices_.empty())return;auto notice=std::move(reminder_notices_.front());reminder_notices_.pop_front();
   if(!manually_hidden_&&!hidden_for_fullscreen_){
+    clear_windows_notice();
     view_.notice=notice.title;view_.notice_kind=7;view_.notice_age=0;notice_start_=std::chrono::steady_clock::now();notice_deadline_=notice_start_+std::chrono::seconds(8);SetTimer(window_,kNotice,config_.reduced_motion?8000:16,nullptr);
     if(notice.summary&&!expanded_){view_.page=Page::reminders;view_.reminder_offset=0;view_.scroll=0;reminder_summary_open_=true;set_expanded(true);}
     resize_for_content();render();
   }
   if(!reminder_notices_.empty())SetTimer(window_,kReminderDelivery,8000,nullptr);
 }
-void IslandWindow::notify(std::wstring text,int kind,float value){if(verification_||!config_.smart_notifications||manually_hidden_||hidden_for_fullscreen_)return;auto now=std::chrono::steady_clock::now();if(kind==0&&!view_.notice.empty()&&view_.notice_kind!=0&&std::chrono::duration<float>(now-notice_start_).count()<.7f)return;bool merge=kind==0&&!view_.notice.empty()&&view_.notice_kind==0;view_.notice=std::move(text);view_.notice_kind=kind;view_.notice_value=value;if(!merge){view_.notice_age=0;notice_start_=now;}notice_deadline_=now+std::chrono::milliseconds(2600);SetTimer(window_,kNotice,config_.reduced_motion?2600:16,nullptr);resize_for_content();render();}
+void IslandWindow::notify(std::wstring text,int kind,float value){if(verification_||!config_.smart_notifications||manually_hidden_||hidden_for_fullscreen_)return;clear_windows_notice();auto now=std::chrono::steady_clock::now();if(kind==0&&!view_.notice.empty()&&view_.notice_kind!=0&&std::chrono::duration<float>(now-notice_start_).count()<.7f)return;bool merge=kind==0&&!view_.notice.empty()&&view_.notice_kind==0;view_.notice=std::move(text);view_.notice_kind=kind;view_.notice_value=value;if(!merge){view_.notice_age=0;notice_start_=now;}notice_deadline_=now+std::chrono::milliseconds(2600);SetTimer(window_,kNotice,config_.reduced_motion?2600:16,nullptr);resize_for_content();render();}
 void IslandWindow::smart_events(){
   auto a=audio_.snapshot();
   if(audio_baseline_){

@@ -60,6 +60,7 @@ private:
   void show_reminder_notice();
   void open_reminders();
   void windows_notification_events();
+  void clear_windows_notice();
   WindowsNotifications windows_notifications_;
   std::deque<WindowsNotice> windows_notice_queue_;
   uint32_t windows_notice_id_{};

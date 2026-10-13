@@ -3,6 +3,7 @@
 #include <winrt/Windows.System.h>
 #include <algorithm>
 #include <cwctype>
+#include <string_view>
 #include <windows.h>
 #include <appmodel.h>
 
@@ -25,6 +26,38 @@ std::wstring windows_notice_text(const WindowsNotice& notice,bool content){
   if(text.size()>240){text.resize(239);if(!text.empty()&&text.back()>=0xd800&&text.back()<=0xdbff)text.pop_back();text+=L"…";}
   return text;
 }
+namespace {
+// Keep externally supplied text bounded and single-line. Never classify the
+// originating web site from a browser notification's title/body.
+std::wstring cleaned_text(std::wstring_view input,size_t limit){
+  std::wstring out;out.reserve(std::min(input.size(),limit));
+  bool space=false;
+  for(wchar_t ch:input){
+    if(iswcntrl(ch)||iswspace(ch)){space=!out.empty();continue;}
+    if(space&&out.size()<limit)out.push_back(L' ');
+    space=false;
+    if(out.size()>=limit)break;
+    out.push_back(ch);
+  }
+  if(!out.empty()&&out.back()>=0xd800&&out.back()<=0xdbff)out.pop_back();
+  return out;
+}
+}
+WindowsNoticePresentation windows_notice_presentation(const WindowsNotice& notice,bool show_content){
+  WindowsNoticePresentation result;
+  result.source=cleaned_text(notice.app,72);
+  if(result.source.empty())result.source=L"Windows";
+  result.title=L"Yeni bildirim";
+  if(show_content){
+    auto title=cleaned_text(notice.title,160);
+    auto body=cleaned_text(notice.body,240);
+    if(title.empty()&&!body.empty()){title=std::move(body);body.clear();}
+    if(!title.empty())result.title=std::move(title);
+    result.preview=std::move(body);
+  }
+  return result;
+}
+
 void WindowsNotifications::clear(){
   try{if(query_)query_.Cancel();if(access_)access_.Cancel();}catch(...){}
   query_=nullptr;access_=nullptr;incoming_.clear();delta_.reset();

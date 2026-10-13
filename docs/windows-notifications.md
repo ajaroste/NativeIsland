@@ -6,9 +6,9 @@ Başlat menüsündeki NativeIsland paketini açın. Eski taşınabilir EXE aynı
 
 Ayarlar → Bildirimler → Windows bildirimlerini adada göster seçeneğini açın. Erişim izni ver düğmesini kullanıp Windows izin ekranını onaylayın. Ayarlardaki durum satırı erişimin başarılı olup olmadığını gösterir. İzin reddedilirse Windows uygulama gizlilik ayarlarından tekrar verilmesi gerekir.
 
-Yeni bir WhatsApp veya başka bir uygulama bildirimi geldiğinde ada kısa süre genişler; uygulama/başlık/içerik gösterir ve 6 saniye sonra eski boyutuna döner. Sıradaki bildirim gösterilmeden önce adadaki diğer kısa bildirimlerin bitmesi beklenir. Ada açıksa içerik alt bildirim satırına gelir; sekme değiştirilmez.
+Herhangi bir uygulamadan Windows bildirim merkezine ulaşan yeni bildirim geldiğinde ada kompakt kart görünümüne geçer; Windows'un bildirdiği kaynak uygulamayı, bildirim başlığını ve varsa mesaj önizlemesini ayrı satırlarda gösterir ve 8 saniye sonra eski boyutuna döner. Sıradaki bildirim gösterilmeden önce adadaki diğer kısa bildirimlerin bitmesi beklenir. Ada açıksa içerik alt bildirim satırına gelir; sekme değiştirilmez.
 
-Windows bildirimleri silinmez, uygulamalar açılmaz, mesajlara cevap gönderilmez. Windows bildirim merkezine ulaşmayan uygulama-içi mesajlar okunamaz. Başlangıçtaki eski bildirimler tekrar gösterilmez. Windows'ta kaldırılan bildirimler kuyruktan çıkarılır.
+Bildirim kaynağı Windows'un verdiği uygulama adıdır: Chrome/Vivaldi/Edge üzerinden gelen web bildirimleri otomatik olarak WhatsApp veya başka bir hizmet diye sınıflandırılmaz. Gerçek uygulama ikonu/profil fotoğrafı Windows'tan güvenilir biçimde edinilemediğinde kaynak baş harfiyle nötr bir rozet gösterilir. Bildirimde desteklenmeyen Yanıtla, Ertele veya Aç eylemleri gösterilmez. Windows bildirimleri silinmez, uygulamalar açılmaz, mesajlara cevap gönderilmez. Windows bildirim merkezine ulaşmayan uygulama-içi mesajlar okunamaz. Başlangıçtaki eski bildirimler tekrar gösterilmez. Windows'ta kaldırılan bildirimler kuyruktan çıkarılır.
 
 ## Gizlilik
 
