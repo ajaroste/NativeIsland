@@ -77,6 +77,18 @@ void DCompRenderer::draw_text(const std::wstring& text,const D2D1_RECT_F& rect,f
   format->SetTextAlignment(align);brush_->SetColor(color);
   context_->DrawTextW(text.c_str(),static_cast<UINT32>(text.size()),format.get(),rect,brush_.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
+void DCompRenderer::draw_notice_preview(const std::wstring& text,const D2D1_RECT_F& rect,float size,D2D1_COLOR_F color){
+  auto& format=notice_formats_[static_cast<int>(size*10)];
+  if(!format){
+    if(FAILED(dwrite_->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_NORMAL,
+      DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,size,L"tr-TR",format.put())))return;
+    format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    format->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+  }
+  format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+  brush_->SetColor(color);
+  context_->DrawTextW(text.c_str(),static_cast<UINT32>(text.size()),format.get(),rect,brush_.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
+}
 void DCompRenderer::box(D2D1_RECT_F rect,float radius,unsigned color,float alpha,bool outline) {
   brush_->SetColor(D2D1::ColorF(color,alpha));auto rounded=D2D1::RoundedRect(rect,radius,radius);
   if(outline)context_->DrawRoundedRectangle(rounded,brush_.get(),1);else context_->FillRoundedRectangle(rounded,brush_.get());
@@ -147,24 +159,39 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
   if(!view.notice.empty()){
     float fade=view.reduced_motion?1.f:std::clamp(std::min(view.notice_age/.14f,(2.6f-view.notice_age)/.25f),0.f,1.f);
     auto layer=D2D1::LayerParameters1();layer.opacity=fade;context_->PushLayer(layer,nullptr);
-    float y=progress>.15f?h-32:1;Icon symbol=view.notice_kind==7||view.notice_kind==8?Icon::bell:view.notice_kind==1||view.notice_kind==6?Icon::microphone:view.notice_kind==2?Icon::headphones:view.notice_kind==3?Icon::battery:view.notice_kind==5?Icon::settings:Icon::volume;
-    if(progress>.15f)box(D2D1::RectF(16,y,w-16,y+27),9,view.theme.surface);
-    float pulse=!view.reduced_motion&&(view.notice_kind==2||view.notice_kind==3||view.notice_kind==6||view.notice_kind==7)?2*std::sin(std::min(view.notice_age/.4f,1.f)*3.14159f):0;
-    unsigned color=view.notice_kind==1?0xef4444:view.notice_kind==3?0xf5a524:view.theme.accent;
-    icon(symbol,20-pulse/2,y+7-pulse/2,18+pulse,color);if(view.notice_kind==1){brush_->SetColor(D2D1::ColorF(color));context_->DrawLine(D2D1::Point2F(19,y+6),D2D1::Point2F(38,y+25),brush_.get(),2);}
-    if(view.notice_kind==8&&progress<=.15f){
-      // Uniform card for any Windows source (desktop app, browser, PWA, system).
-      // The browser name stays the browser name; don't fabricate website branding.
+    float y=progress>.15f?h-32:1;
+    const bool compact_windows=view.notice_kind==8&&progress<=.15f;
+    if(!compact_windows){
+      Icon symbol=view.notice_kind==7||view.notice_kind==8?Icon::bell:view.notice_kind==1||view.notice_kind==6?Icon::microphone:view.notice_kind==2?Icon::headphones:view.notice_kind==3?Icon::battery:view.notice_kind==5?Icon::settings:Icon::volume;
+      if(progress>.15f)box(D2D1::RectF(16,y,w-16,y+27),9,view.theme.surface);
+      float pulse=!view.reduced_motion&&(view.notice_kind==2||view.notice_kind==3||view.notice_kind==6||view.notice_kind==7)?2*std::sin(std::min(view.notice_age/.4f,1.f)*3.14159f):0;
+      unsigned color=view.notice_kind==1?0xef4444:view.notice_kind==3?0xf5a524:view.theme.accent;
+      icon(symbol,20-pulse/2,y+7-pulse/2,18+pulse,color);
+      if(view.notice_kind==1){brush_->SetColor(D2D1::ColorF(color));context_->DrawLine(D2D1::Point2F(19,y+6),D2D1::Point2F(38,y+25),brush_.get(),2);}
+    }
+    if(compact_windows){
+      // Use the Windows-reported source; do not invent a website or profile icon.
       const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
-      box(D2D1::RectF(17,23,61,67),14,view.theme.accent_soft);
+      const float avatar=36.f;
+      const float avatar_y=std::max(12.f,(h-avatar)*.5f);
+      box(D2D1::RectF(14,avatar_y,50,avatar_y+avatar),11,view.theme.accent_soft);
       const wchar_t initial=source.empty()?L'\0':source.front();
       if((initial>=L'A'&&initial<=L'Z')||(initial>=L'a'&&initial<=L'z')||(initial>=L'0'&&initial<=L'9')){
-        wchar_t upper=initial>=L'a'&&initial<=L'z'?static_cast<wchar_t>(initial-L'a'+L'A'):initial;
-        draw_text(std::wstring(1,upper),D2D1::RectF(17,23,61,67),18,D2D1::ColorF(view.theme.accent),DWRITE_TEXT_ALIGNMENT_CENTER);
-      }else icon(Icon::bell,28,34,22,view.theme.accent);
-      draw_text(source,D2D1::RectF(75,8,w-18,30),11,D2D1::ColorF(view.theme.accent));
-      draw_text(view.notice_title.empty()?L"Yeni bildirim":view.notice_title,D2D1::RectF(75,31,w-18,54),13,D2D1::ColorF(view.theme.text));
-      if(!view.notice_body.empty())draw_text(view.notice_body,D2D1::RectF(75,55,w-18,80),11,D2D1::ColorF(view.theme.secondary));
+        const wchar_t upper=initial>=L'a'&&initial<=L'z'?static_cast<wchar_t>(initial-L'a'+L'A'):initial;
+        draw_text(std::wstring(1,upper),D2D1::RectF(14,avatar_y,50,avatar_y+avatar),15,D2D1::ColorF(view.theme.accent),DWRITE_TEXT_ALIGNMENT_CENTER);
+      }else icon(Icon::bell,23,avatar_y+9,18,view.theme.accent);
+      // One shared hierarchy for capsule and droplet shapes.
+      constexpr float x=64.f;
+      draw_text(source,D2D1::RectF(x,7,w-17,25),10,D2D1::ColorF(view.theme.accent));
+      const float title_y=view.notice_body.empty()?29.f:26.f;
+      draw_text(view.notice_title.empty()?L"Yeni bildirim":view.notice_title,
+        D2D1::RectF(x,title_y,w-17,title_y+23),12,D2D1::ColorF(view.theme.text));
+      if(!view.notice_body.empty()){
+        constexpr float body_y=49.f;
+        const float body_bottom=std::min(h-9.f,body_y+(h>=100.f?43.f:22.f));
+        draw_notice_preview(view.notice_body,D2D1::RectF(x,body_y,w-17,body_bottom),
+          11,D2D1::ColorF(view.theme.secondary));
+      }
     }else if(view.notice_kind==8){
       const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
       draw_text(source+L" · "+(view.notice_title.empty()?L"Yeni bildirim":view.notice_title),D2D1::RectF(46,y,w-18,y+30),11,D2D1::ColorF(view.theme.text));
@@ -196,7 +223,7 @@ HRESULT DCompRenderer::capture() {
 }
 void DCompRenderer::discard_device() {
   if(frame_ready_){CloseHandle(frame_ready_);frame_ready_=nullptr;}capacity_width_=capacity_height_=0;swap_flags_=0;
-  app_icons_.clear();file_icons_.clear();clip_images_.clear();opacity_effect_.reset();artwork_.reset();artwork_version_=0;formats_.clear();icons_.clear();svg_context_.reset();brush_.reset();
+  app_icons_.clear();file_icons_.clear();clip_images_.clear();opacity_effect_.reset();artwork_.reset();artwork_version_=0;formats_.clear();notice_formats_.clear();icons_.clear();svg_context_.reset();brush_.reset();
   if(context_)context_->SetTarget(nullptr);target_bitmap_.reset();context_.reset();swap_chain_.reset();visual_.reset();dcomp_target_.reset();dcomp_.reset();
   d2d_device_.reset();d2d_factory_.reset();dwrite_.reset();dxgi_device_.reset();d3d_.reset();
 }

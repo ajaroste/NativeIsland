@@ -1,5 +1,6 @@
 #pragma once
 #include "services/windows_notifications.hpp"
+#include "ui/notification_layout.hpp"
 inline int windows_notification_tests(){
   ni::NotificationDelta delta;ni::WindowsNotice old{1,100,L"WhatsApp",L"Eski",L"Mesaj"},fresh{2,101,L"WhatsApp",L"Emir",L"Merhaba"};
   if(!delta.update({old}).empty())return 60;
@@ -19,6 +20,12 @@ inline int windows_notification_tests(){
   if(unknown.source!=L"Windows"||unknown.title!=L"Test message"||!unknown.preview.empty())return 70;
   auto long_card=ni::windows_notice_presentation({5,105,std::wstring(400,L'x'),std::wstring(400,L'y'),std::wstring(500,L'z')},true);
   if(long_card.source.size()>72||long_card.title.size()>160||long_card.preview.size()>240)return 71;
+  const auto short_notice=ni::compact_notice_size(L"LanDeck.Services.exe",L"LanDeck",L"Test");
+  if(short_notice.width>360||short_notice.height!=84)return 72;
+  const auto hidden=ni::compact_notice_size(L"WhatsApp",L"Yeni bildirim",L"");
+  if(hidden.height!=68||hidden.width<312)return 73;
+  const auto long_notice=ni::compact_notice_size(L"WhatsApp",L"Arkadaş",std::wstring(220,L'x'));
+  if(long_notice.height!=104||long_notice.width>488)return 74;
   auto config=ni::Config::parse("{\"windowsNotifications\":true,\"windowsNotificationContent\":false}");if(!config.windows_notifications||config.windows_notification_content||ni::Config{}.windows_notifications)return 67;
   return 0;
 }

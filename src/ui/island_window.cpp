@@ -14,6 +14,7 @@
 #include "files/drag_source.hpp"
 #include "services/clipboard_history.hpp"
 #include "ui/island_shape.hpp"
+#include "ui/notification_layout.hpp"
 
 namespace ni {
 namespace {
@@ -299,10 +300,13 @@ int IslandWindow::export_previews(const std::filesystem::path& directory) {
   report<<"PASS reminder day navigation and selected-date entry\n";
   view.page=Page::clipboard;view.clipboard_query=L"uzun";view.height=238;renderer_.resize(dip_to_px(532,dpi_),dip_to_px(270,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"clipboard-search.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 24;
   view.expansion=0;view.notice=L"Vivaldi · Yeni yorum";view.notice_app=L"Vivaldi";view.notice_title=L"Yeni yorum";view.notice_body=L"Tasarım dokümanındaki değişiklikleri incele.";view.notice_kind=8;view.notice_age=1;
-  renderer_.resize(dip_to_px(508,dpi_),dip_to_px(124,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"notice-windows.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 58;
+  renderer_.resize(dip_to_px(520,dpi_),dip_to_px(136,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"notice-windows.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 58;
   const bool motion_before=config_.reduced_motion;config_.reduced_motion=true;
-  view_.notice=L"Windows notification regression";view_.notice_kind=8;set_expanded(false);
-  if(static_cast<int>(width_.value())!=dip_to_px(476,dpi_)||static_cast<int>(height_.value())!=dip_to_px(92,dpi_))return 59;
+  view_.notice=L"Windows notification regression";view_.notice_app=L"Vivaldi";view_.notice_title=L"Yeni yorum";
+  view_.notice_body=L"Test";view_.notice_kind=8;set_expanded(false);
+  const auto expected_notice=compact_notice_size(view_.notice_app,view_.notice_title,view_.notice_body);
+  if(static_cast<int>(width_.value())!=dip_to_px(expected_notice.width,dpi_)||
+     static_cast<int>(height_.value())!=dip_to_px(expected_notice.height,dpi_))return 59;
   notice_deadline_=std::chrono::steady_clock::now()-std::chrono::seconds(1);handle(WM_TIMER,kNotice,0);
   if(!view_.notice.empty()||static_cast<int>(width_.value())!=dip_to_px(config_.collapsed_width,dpi_)||static_cast<int>(height_.value())!=dip_to_px(config_.collapsed_height,dpi_))return 59;
   config_.reduced_motion=motion_before;
@@ -510,9 +514,11 @@ void IslandWindow::set_expanded(bool expanded, bool pin) {
   KillTimer(window_, kCollapseDelay);
   expanded_ = expanded;
   const bool toast=!view_.notice.empty()&&view_.notice_kind==8;
-  planned_height_=expanded?expanded_height():toast?92:config_.collapsed_height;
+  const auto notice_size=compact_notice_size(view_.notice_app,view_.notice_title,view_.notice_body);
+  planned_height_=expanded?expanded_height():toast?notice_size.height:config_.collapsed_height;
+  planned_width_=expanded?std::max(500,config_.expanded_width):toast?notice_size.width:config_.collapsed_width;
   state_ = expanded ? (pin ? State::pinned : State::expanding) : State::collapsing;
-  const float target_width = static_cast<float>(dip_to_px(expanded ? std::max(500,config_.expanded_width) : toast?476:config_.collapsed_width, dpi_));
+  const float target_width = static_cast<float>(dip_to_px(planned_width_,dpi_));
   const float target_height = static_cast<float>(dip_to_px(planned_height_, dpi_));
   float seconds=config_.animation_duration_ms/1000.f;
   if(config_.animation_style==2)seconds*=.65f;
@@ -579,7 +585,14 @@ int IslandWindow::expanded_height()const {
   const size_t count=view_.page==Page::sound?audio_.snapshot().sessions.size():view_.page==Page::tasks?google_calendar_.snapshot().tasks.size():view_.page==Page::reminders?reminders_for_day(reminders_.snapshot(),reminder_day_at_offset(reminder_now(),view_.reminder_offset),true).size():view_.page==Page::applications?apps_.snapshot().size():files_.size();
   return page_height(view_.page,count,clipboard_matches(clipboard_,view_.clipboard_query).size(),config_.clipboard_history,bluetooth)+(view_.notice.empty()?0:34);
 }
-void IslandWindow::resize_for_content(){if(expanded_&&planned_height_!=expanded_height())set_expanded(true,state_==State::pinned);else if(!expanded_&&planned_height_!=(!view_.notice.empty()&&view_.notice_kind==8?92:config_.collapsed_height))set_expanded(false);}
+void IslandWindow::resize_for_content(){
+  if(expanded_){if(planned_height_!=expanded_height())set_expanded(true,state_==State::pinned);return;}
+  const bool toast=!view_.notice.empty()&&view_.notice_kind==8;
+  const auto size=compact_notice_size(view_.notice_app,view_.notice_title,view_.notice_body);
+  const int h=toast?size.height:config_.collapsed_height;
+  const int w=toast?size.width:config_.collapsed_width;
+  if(planned_height_!=h||planned_width_!=w)set_expanded(false);
+}
 void IslandWindow::update_media_animation() {
   auto snapshot=media_.snapshot();
   const bool visible=!manually_hidden_&&!hidden_for_fullscreen_&&(!expanded_||view_.page==Page::media);

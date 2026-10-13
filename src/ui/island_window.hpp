@@ -105,7 +105,7 @@ private:
   AppLauncher apps_;
   float wave_target_{};
   bool waves_running_{};
-  int planned_height_{};
+  int planned_height_{},planned_width_{};
   std::chrono::steady_clock::time_point wave_start_{},wave_frame_{};
   int pressed_hit_{-1};
   std::chrono::steady_clock::time_point page_transition_{};
