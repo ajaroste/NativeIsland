@@ -93,6 +93,20 @@ void DCompRenderer::update_notice_logo(const std::shared_ptr<const std::vector<s
   if(bytes==notice_logo_source_)return;
   notice_logo_source_=bytes;notice_logo_bitmap_.reset();
   if(!context_||!bytes||bytes->empty()||bytes->size()>512*1024)return;
+  if(bytes->size()>=12&&(*bytes)[0]=='N'&&(*bytes)[1]=='I'&&
+     (*bytes)[2]=='R'&&(*bytes)[3]=='G'){
+    auto read_u32=[&](std::size_t i)->UINT {
+      return static_cast<UINT>((*bytes)[i])|(static_cast<UINT>((*bytes)[i+1])<<8)|
+             (static_cast<UINT>((*bytes)[i+2])<<16)|(static_cast<UINT>((*bytes)[i+3])<<24);
+    };
+    const UINT w=read_u32(4),h=read_u32(8);
+    if(w&&h&&w<=128&&h<=128&&bytes->size()==12+static_cast<std::size_t>(w)*h*4){
+      auto props=D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED));
+      context_->CreateBitmap(D2D1::SizeU(w,h),bytes->data()+12,w*4,&props,notice_logo_bitmap_.put());
+    }
+    return;
+  }
   ComPtr<IStream> stream;
   stream.reset(SHCreateMemStream(reinterpret_cast<const BYTE*>(bytes->data()),static_cast<UINT>(bytes->size())));
   if(!stream)return;

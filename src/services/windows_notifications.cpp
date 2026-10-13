@@ -1,4 +1,5 @@
 #include "services/windows_notifications.hpp"
+#include "services/notification_icon_resolver.hpp"
 #include <winrt/Windows.ApplicationModel.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.Storage.Streams.h>
@@ -64,6 +65,7 @@ namespace {
 // Best effort and bounded: application logos are loaded in the background.
 void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
                     const std::wstring& app_id,
+                    const std::wstring& display_name,
                     winrt::Windows::ApplicationModel::AppInfo app){
   if(app_id.empty()||!app)return;
   {
@@ -72,7 +74,7 @@ void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
     if(cache->ready.size()+cache->pending.size()>=32||cache->pending.size()>=3)return;
     cache->pending.insert(app_id);
   }
-  std::thread([cache,app_id,app=std::move(app)]() mutable {
+  std::thread([cache,app_id,display_name,app=std::move(app)]() mutable {
     std::vector<std::uint8_t> bytes;
     try {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -90,6 +92,9 @@ void queue_app_logo(const std::shared_ptr<NoticeLogoCache>& cache,
         }
       }
     }catch(...){bytes.clear();}
+    // The WinRT logo may be absent for unpackaged desktop apps. Resolve the
+    // shell's own identity icon without blocking the island's UI thread.
+    if(bytes.empty())bytes=notification_shell_icon(app_id,display_name);
     auto result=std::make_shared<const std::vector<std::uint8_t>>(std::move(bytes));
     std::scoped_lock lock(cache->mutex);
     cache->pending.erase(app_id);
@@ -138,7 +143,7 @@ void WindowsNotifications::poll(){
         if(!n.title.empty()||!n.body.empty())current.push_back(std::move(n));
       }catch(...){} // A malformed toast must not disable all other apps.
       incoming_=delta_.update(current);
-      for(const auto& n:incoming_){auto it=apps.find(n.app_id);if(it!=apps.end())queue_app_logo(logo_cache_,n.app_id,it->second);}
+      for(const auto& n:incoming_){auto it=apps.find(n.app_id);if(it!=apps.end())queue_app_logo(logo_cache_,n.app_id,n.app,it->second);}
       status_=L"İzin verildi · Yeni Windows bildirimleri adada gösterilir.";
     }
     query_=listener_.GetNotificationsAsync(NotificationKinds::Toast);
