@@ -1,0 +1,7 @@
+# 0.7.4 — simpler reminder entry and calendar settings
+
+Windows tray balloon creation has been removed from reminder delivery; the in-island bell/transient notice, daily summary and due-time queue remain. Settings now owns Google JSON selection, synchronization, disconnect and multi-calendar selection, plus daily bell enable/hour preferences. Its periodic Google refresh touches only status/button/list state when changed, not the native combo lifecycle. Google operations remain asynchronous and use the same existing service/vault.
+
+The reminder + action opens a compact owned 400×176 DIP client area with title/date/time/all-day and Add/Cancel. It contains no history table, Google controls or daily-summary preferences. Empty titles produce inline validation, saving closes the entry and updates the island; Cancel closes without saving. The obsolete large management form is no longer instantiated. Existing reminder/config/vault files are unchanged by this UI migration.
+
+Verification: Release build and CTest 1/1 passed. Native graphical regression exited 0, checking Google controls in Settings, disabled sync while disconnected, all 24 morning-hour selections and existing dropdown lifecycle, compact entry without list/Google controls, inline blank-title validation, successful local add and automatic close, owned dialogs/popups above island, and existing animation/render/clipboard regression fixtures. Live OAuth was not repeated: this change relocates the existing handlers and does not modify account authorization.

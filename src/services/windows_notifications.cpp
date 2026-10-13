@@ -1,0 +1,71 @@
+#include "services/windows_notifications.hpp"
+#include <winrt/Windows.ApplicationModel.h>
+#include <winrt/Windows.System.h>
+#include <algorithm>
+#include <cwctype>
+#include <windows.h>
+#include <appmodel.h>
+
+namespace ni {
+using namespace winrt::Windows::UI::Notifications;
+using namespace winrt::Windows::UI::Notifications::Management;
+using winrt::Windows::Foundation::AsyncStatus;
+std::vector<WindowsNotice> NotificationDelta::update(const std::vector<WindowsNotice>& current){
+  std::map<uint32_t,int64_t> next;std::vector<WindowsNotice> added;
+  for(const auto& n:current){next[n.id]=n.created;if(baseline_&&(!seen_.contains(n.id)||seen_.at(n.id)!=n.created))added.push_back(n);}
+  seen_=std::move(next);baseline_=true;
+  std::stable_sort(added.begin(),added.end(),[](const auto& a,const auto& b){return a.created<b.created;});
+  if(added.size()>20)added.erase(added.begin(),added.end()-20);return added;
+}
+std::wstring windows_notice_text(const WindowsNotice& notice,bool content){
+  std::wstring text=notice.app.empty()?L"Windows":notice.app;
+  if(content){if(!notice.title.empty())text+=L" · "+notice.title;if(!notice.body.empty())text+=L" · "+notice.body;}
+  else text+=L" · Yeni bildirim";
+  for(auto& c:text)if(iswcntrl(c))c=L' ';
+  if(text.size()>240){text.resize(239);if(!text.empty()&&text.back()>=0xd800&&text.back()<=0xdbff)text.pop_back();text+=L"…";}
+  return text;
+}
+void WindowsNotifications::clear(){
+  try{if(query_)query_.Cancel();if(access_)access_.Cancel();}catch(...){}
+  query_=nullptr;access_=nullptr;incoming_.clear();delta_.reset();
+}
+void WindowsNotifications::enable(bool enabled){
+  if(enabled_==enabled)return;enabled_=enabled;clear();
+  status_=enabled?L"Windows erişim izni kontrol ediliyor…":L"Kapalı · Bildirim içeriği kaydedilmez.";
+}
+void WindowsNotifications::request_access(){
+  if(!enabled_)return;
+  UINT32 length{};if(GetCurrentPackageFullName(&length,nullptr)==APPMODEL_ERROR_NO_PACKAGE){status_=L"Bu EXE paket kimliğine sahip değil. Bildirim erişimi için MSIX sürümünü kurun.";return;}
+  try{if(!listener_)listener_=UserNotificationListener::Current();if(!access_){access_=listener_.RequestAccessAsync();status_=L"Windows izin penceresini onaylayın.";}}
+  catch(const winrt::hresult_error&){status_=L"Erişim başlatılamadı. Bildirim yeteneği olan MSIX paketi gerekli olabilir.";}
+  catch(...){status_=L"Windows bildirim erişimi kullanılamıyor.";}
+}
+void WindowsNotifications::poll(){
+  if(!enabled_)return;
+  UINT32 length{};if(GetCurrentPackageFullName(&length,nullptr)==APPMODEL_ERROR_NO_PACKAGE){status_=L"Bu EXE paket kimliğine sahip değil. Bildirim erişimi için MSIX sürümünü kurun.";return;}
+  try{
+    if(!listener_)listener_=UserNotificationListener::Current();
+    if(access_){if(access_.Status()==AsyncStatus::Started)return;auto op=access_;access_=nullptr;if(op.Status()==AsyncStatus::Completed)op.GetResults();}
+    if(listener_.GetAccessStatus()!=UserNotificationListenerAccessStatus::Allowed){
+      if(query_)query_.Cancel();query_=nullptr;incoming_.clear();delta_.reset();status_=L"İzin gerekli · Erişim izni ver düğmesini kullanın.";return;
+    }
+    if(query_){
+      if(query_.Status()==AsyncStatus::Started)return;
+      auto op=query_;query_=nullptr;
+      if(op.Status()!=AsyncStatus::Completed){status_=L"Windows bildirimleri okunamadı; erişim iznini kontrol edin.";return;}
+      std::vector<WindowsNotice> current;
+      for(const auto& item:op.GetResults())try{
+        auto binding=item.Notification().Visual().GetBinding(KnownNotificationBindings::ToastGeneric());if(!binding)continue;
+        WindowsNotice n;n.id=item.Id();n.created=item.CreationTime().time_since_epoch().count();
+        n.app=item.AppInfo().DisplayInfo().DisplayName();if(std::wstring(item.AppInfo().AppUserModelId()).find(L"NativeIsland")!=std::wstring::npos)continue;
+        for(const auto& text:binding.GetTextElements()){if(n.title.empty())n.title=text.Text();else{if(!n.body.empty())n.body+=L" · ";n.body+=text.Text();}if(n.body.size()>1024)break;}
+        if(!n.title.empty()||!n.body.empty())current.push_back(std::move(n));
+      }catch(...){} // A malformed toast must not disable all other apps.
+      incoming_=delta_.update(current);status_=L"İzin verildi · Yeni Windows bildirimleri adada gösterilir.";
+    }
+    query_=listener_.GetNotificationsAsync(NotificationKinds::Toast);
+  }catch(const winrt::hresult_error&){clear();status_=L"Windows erişimi kullanılamıyor. Bildirim yeteneği olan MSIX paketi gerekli olabilir.";}
+  catch(...){clear();status_=L"Windows bildirimleri geçici olarak okunamıyor.";}
+}
+std::vector<WindowsNotice> WindowsNotifications::take(){auto out=std::move(incoming_);incoming_.clear();return out;}
+}

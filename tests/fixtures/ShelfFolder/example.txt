@@ -1,0 +1,1 @@
+NativeIsland copy-only shelf drag test fixture.

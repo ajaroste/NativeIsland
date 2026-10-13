@@ -1,0 +1,7 @@
+# NativeIsland 0.7.5 — modern native Settings
+
+The long settings form is replaced by four sidebar pages: Görünüm, Davranış, Pano, Google Takvim. A 744×606 DIP client layout uses a fixed header/footer, rounded dark content card, clear category labels, theme palette tiles, custom-drawn buttons/dropdown items and accent-colored trackbar channel/thumb. Numeric slider values update while dragging. The primary button's text contrast adapts to the chosen accent. Short screens retain a vertical-scroll fallback; normal-sized screens fit the page without the old long scroll.
+
+Controls keep their original IDs and handlers, including native keyboard interaction and selection notification semantics. Page navigation does not call the settings-change callback, hidden controls cannot be tabbed into, and opening a combo does not apply changes or refresh its selection. Timed Google refresh remains independent of page switching. Window ownership and no-Z-order-change behavior remain; existing settings, reminders and Google vault paths are untouched.
+
+QA exports real native-window PNGs through PrintWindow/WIC to out/previews/settings-0.png through settings-3.png. The graphical regression validates all four pages, control visibility, no navigation side effects, native dropdown open state, every selection, popup/dialog stacking, compact reminder entry and the existing renderer regression suite. No live OAuth/disconnect operation is performed by this verification.
