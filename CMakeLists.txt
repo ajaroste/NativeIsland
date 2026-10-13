@@ -15,6 +15,7 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 add_executable(NativeIsland WIN32
   src/app/NativeIsland.manifest
   src/app/version.rc
+  src/app/nativeisland.ico
   src/app/main.cpp
   src/core/config.cpp
   src/rendering/dcomp_renderer.cpp
