@@ -14,6 +14,7 @@
 #include "files/drag_source.hpp"
 #include "services/clipboard_history.hpp"
 #include "ui/island_shape.hpp"
+#include "ui/notification_layout.hpp"
 
 namespace ni {
 namespace {
@@ -248,6 +249,8 @@ int IslandWindow::export_previews(const std::filesystem::path& directory) {
   renderer_.resize(dip_to_px(532,dpi_),dip_to_px(static_cast<int>(view.height)+32,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"tasks-island.png").wstring());if(FAILED(renderer_.render(system,music,view)))return 79;
   if(std::count_if(renderer_.hit_targets().begin(),renderer_.hit_targets().end(),[](const auto& h){return h.action==Action::complete_task;})!=2)return 80;
   if(std::count_if(renderer_.hit_targets().begin(),renderer_.hit_targets().end(),[](const auto& h){return h.action==Action::delete_task&&!h.key.empty();})!=2||std::any_of(renderer_.hit_targets().begin(),renderer_.hit_targets().end(),[](const auto& h){return h.key==L"fixture3";}))return 101;
+  if(std::count_if(renderer_.hit_targets().begin(),renderer_.hit_targets().end(),[](const auto& h){return h.action==Action::edit_task&&!h.key.empty();})!=2)return 108;
+  for(const auto& edit_target:renderer_.hit_targets())if(edit_target.action==Action::edit_task){auto remove=std::find_if(renderer_.hit_targets().begin(),renderer_.hit_targets().end(),[&](const auto& h){return h.action==Action::delete_task&&h.key==edit_target.key;});if(remove==renderer_.hit_targets().end()||edit_target.rect.right>remove->rect.left)return 109;}
   view.island_shape=0;
   const auto saved_page=view_.page;RECT role_before{};GetWindowRect(window_,&role_before);activate({{},Action::tab,7},0);if(view_.page!=Page::tasks)return 81;RECT role_after{};GetWindowRect(window_,&role_after);if(role_before.left+role_before.right!=role_after.left+role_after.right||role_before.top!=role_after.top)return 82;activate({{},Action::tab,2},0);if(view_.page!=Page::media)return 83;view_.page=saved_page;
   view.google.connected=true;
@@ -261,6 +264,15 @@ int IslandWindow::export_previews(const std::filesystem::path& directory) {
   SendMessageW(entry,WM_COMMAND,MAKEWPARAM(TaskEntryWindow::add_id,BN_SETFOCUS),reinterpret_cast<LPARAM>(add));if(submissions||!task_entry_.visible())return 104;
   SendMessageW(add,BM_CLICK,0,0);if(entered!=L"Yeni görev"||task_entry_.visible()||submissions!=1)return 89;
   task_entry_.open(instance_,window_,add_fixture);entry=owned_window(L"NativeIslandTaskEntry");SetDlgItemTextW(entry,TaskEntryWindow::title_id,L"İptal edilen görev");task_entry_.close();if(submissions!=1)return 105;
+  int edit_attempts=0;bool accept_edit=false;std::wstring edited_title;
+  task_entry_.open_edit(instance_,window_,L"edit-fixture",L"Eski başlık",[&](std::wstring title){++edit_attempts;edited_title=std::move(title);auto dialog=owned_window(L"NativeIslandTaskEntry");SendMessageW(dialog,WM_COMMAND,MAKEWPARAM(TaskEntryWindow::add_id,BN_CLICKED),reinterpret_cast<LPARAM>(GetDlgItem(dialog,TaskEntryWindow::add_id)));return accept_edit;});
+  entry=owned_window(L"NativeIslandTaskEntry");wchar_t edit_text[1025]{};GetDlgItemTextW(entry,TaskEntryWindow::title_id,edit_text,1025);if(std::wstring(edit_text)!=L"Eski başlık"||task_entry_.task_key()!=L"edit-fixture")return 110;
+  SetDlgItemTextW(entry,TaskEntryWindow::title_id,L"  Yeni başlık  ");task_entry_.open_edit(instance_,window_,L"edit-fixture",L"Eski başlık",[](std::wstring){return true;});task_entry_.open_edit(instance_,window_,L"other-fixture",L"Başka başlık",[](std::wstring){return true;});GetDlgItemTextW(entry,TaskEntryWindow::title_id,edit_text,1025);if(entry!=owned_window(L"NativeIslandTaskEntry")||task_entry_.task_key()!=L"edit-fixture"||std::wstring(edit_text)!=L"  Yeni başlık  "||edit_attempts)return 111;
+  SendMessageW(GetDlgItem(entry,TaskEntryWindow::add_id),BM_CLICK,0,0);if(edit_attempts!=1||!task_entry_.visible()||edited_title!=L"Yeni başlık")return 112;
+  accept_edit=true;SendMessageW(GetDlgItem(entry,TaskEntryWindow::add_id),BM_CLICK,0,0);if(edit_attempts!=2||task_entry_.visible())return 113;
+  task_entry_.open_edit(instance_,window_,L"unchanged-fixture",L"Aynı başlık",[&](std::wstring){++edit_attempts;return true;});entry=owned_window(L"NativeIslandTaskEntry");SendMessageW(GetDlgItem(entry,TaskEntryWindow::add_id),BM_CLICK,0,0);if(edit_attempts!=2||task_entry_.visible())return 114;
+  task_entry_.open_edit(instance_,window_,L"cancel-fixture",L"Başlık",[&](std::wstring){++edit_attempts;return true;});task_entry_.close();if(edit_attempts!=2)return 115;
+  report<<"PASS task edit: prefilled title, single form, stable task identity/input, reentrant save suppressed, rejected save retained, unchanged/cancel do not submit\n";
   report<<"PASS droplet media without volume controls, session mixer, Tasks fixtures and header Tasks navigation at fixed anchor\nPASS no satellite window and no header overlap at 465/500/650 DIP\nPASS completed tasks hidden; delete targets preserve task IDs\nPASS task entry ignores typing, focus, legacy IDOK and Enter; only Ekle submits once; blank/cancel do not submit\n";
   for(int alignment:{0,50,100}){config_.horizontal_percent=alignment;position();RECT before{};GetWindowRect(window_,&before);config_.top_gap=10;position();RECT after{};GetWindowRect(window_,&after);if(before.left!=after.left)return 15;config_.top_gap=7;}
   toggle_hidden();if(IsWindowVisible(window_))return 16;check_fullscreen();if(IsWindowVisible(window_))return 17;toggle_hidden();if(!IsWindowVisible(window_))return 18;
@@ -298,12 +310,20 @@ int IslandWindow::export_previews(const std::filesystem::path& directory) {
   renderer_.capture_next((directory/L"reminders-days-empty.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 54;
   report<<"PASS reminder day navigation and selected-date entry\n";
   view.page=Page::clipboard;view.clipboard_query=L"uzun";view.height=238;renderer_.resize(dip_to_px(532,dpi_),dip_to_px(270,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"clipboard-search.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 24;
-  view.expansion=0;view.notice=L"WhatsApp · Emir · Toplantı 15 dakika sonra başlıyor.";view.notice_app=L"WhatsApp";view.notice_kind=8;view.notice_age=1;
-  renderer_.resize(dip_to_px(452,dpi_),dip_to_px(96,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"notice-windows.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 58;
+  view.expansion=0;view.notice=L"Vivaldi · Yeni yorum";view.notice_app=L"Vivaldi";view.notice_title=L"Yeni yorum";view.notice_body=L"Tasarım dokümanındaki değişiklikleri incele.";view.notice_kind=8;view.notice_age=1;
+  renderer_.resize(dip_to_px(520,dpi_),dip_to_px(136,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"notice-windows.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 58;
+  auto sample_image=[](unsigned b,unsigned g,unsigned r){auto pixels=std::make_shared<std::vector<std::uint8_t>>(12+64*48*4);(*pixels)[0]='N';(*pixels)[1]='I';(*pixels)[2]='R';(*pixels)[3]='G';(*pixels)[4]=64;(*pixels)[8]=48;for(size_t i=12;i<pixels->size();i+=4){(*pixels)[i]=static_cast<std::uint8_t>(b);(*pixels)[i+1]=static_cast<std::uint8_t>(g);(*pixels)[i+2]=static_cast<std::uint8_t>(r);(*pixels)[i+3]=255;}return pixels;};
+  for(int scenario=0;scenario<6;++scenario){view.island_shape=scenario==5?1:0;view.notice_logo=scenario==0?nullptr:sample_image(32,48,220);view.notice_portrait=scenario==2?sample_image(190,155,70):scenario==3?std::make_shared<const std::vector<std::uint8_t>>(3,std::uint8_t{}):nullptr;view.notice_title=L"Örnek bildirim";view.notice_body=scenario>=4?L"Bu uzun bir test mesajıdır. Uygulama adı, başlık ve mesaj aynı sütundan başlar; satırlar düzenli aralıklarla devam eder. Uzun içerik güvenli kenar boşlukları içinde önizlenir.":L"Test verisi · kişi fotoğrafı ve uygulama ikonu ayrı alanlardır.";auto size=compact_notice_size(view.notice_app,view.notice_title,view.notice_body,scenario==2);renderer_.resize(dip_to_px(size.width+32,dpi_),dip_to_px(size.height+32,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/std::format(L"notice-identity-{}.png",scenario)).wstring());if(FAILED(renderer_.render(system,media,view)))return 106;}
+  view.notice_portrait.reset();view.notice_logo.reset();view.island_shape=0;
+  report<<"PASS notification image fixtures: no portrait, app icon only, circular independent portrait, malformed portrait hidden\n";
   const bool motion_before=config_.reduced_motion;config_.reduced_motion=true;
-  view_.notice=L"Windows notification regression";view_.notice_kind=8;set_expanded(false);
-  if(static_cast<int>(width_.value())!=dip_to_px(420,dpi_)||static_cast<int>(height_.value())!=dip_to_px(64,dpi_))return 59;
+  view_.notice=L"Windows notification regression";view_.notice_app=L"Vivaldi";view_.notice_title=L"Yeni yorum";
+  view_.notice_body=L"Test";view_.notice_kind=8;view_.notice_portrait=sample_image(190,155,70);set_expanded(false);
+  const auto expected_notice=compact_notice_size(view_.notice_app,view_.notice_title,view_.notice_body,true);
+  if(static_cast<int>(width_.value())!=dip_to_px(expected_notice.width,dpi_)||
+     static_cast<int>(height_.value())!=dip_to_px(expected_notice.height,dpi_))return 59;
   notice_deadline_=std::chrono::steady_clock::now()-std::chrono::seconds(1);handle(WM_TIMER,kNotice,0);
+  if(view_.notice_portrait||view_.notice_logo)return 107;
   if(!view_.notice.empty()||static_cast<int>(width_.value())!=dip_to_px(config_.collapsed_width,dpi_)||static_cast<int>(height_.value())!=dip_to_px(config_.collapsed_height,dpi_))return 59;
   config_.reduced_motion=motion_before;
   view.expansion=0;view.notice=L"Mikrofon sessize alındı";view.notice_kind=1;view.notice_age=.1f;renderer_.resize(dip_to_px(260,dpi_),dip_to_px(69,dpi_),static_cast<float>(dpi_));renderer_.capture_next((directory/L"notice-microphone.png").wstring());if(FAILED(renderer_.render(system,media,view)))return 25;
@@ -336,7 +356,7 @@ LRESULT IslandWindow::handle(UINT message, WPARAM wparam, LPARAM lparam) {
     if(wparam==kWindowsNotifications){windows_notification_events();return 0;}
     if(wparam==kReminders){reminder_events();render();return 0;}
     if(wparam==kReminderDelivery){KillTimer(window_,kReminderDelivery);show_reminder_notice();return 0;}
-    if(wparam==kNotice){auto now=std::chrono::steady_clock::now();float remaining=std::chrono::duration<float>(notice_deadline_-now).count();view_.notice_age=remaining<.25f?2.6f-remaining:std::min(2.35f,std::chrono::duration<float>(now-notice_start_).count());if(remaining<=0){view_.notice.clear();KillTimer(window_,kNotice);resize_for_content();if(reminder_summary_open_){reminder_summary_open_=false;schedule_collapse();}}render();return 0;}
+    if(wparam==kNotice){auto now=std::chrono::steady_clock::now();float remaining=std::chrono::duration<float>(notice_deadline_-now).count();view_.notice_age=remaining<.25f?2.6f-remaining:std::min(2.35f,std::chrono::duration<float>(now-notice_start_).count());if(remaining<=0){if(view_.notice_kind==8)clear_windows_notice();else{view_.notice.clear();KillTimer(window_,kNotice);}resize_for_content();if(reminder_summary_open_){reminder_summary_open_=false;schedule_collapse();}}render();return 0;}
     if(wparam==kAutoExit){DestroyWindow(window_);return 0;}
     if(wparam==kWaves) {
       auto now=std::chrono::steady_clock::now();float dt=std::chrono::duration<float>(now-wave_frame_).count();wave_frame_=now;
@@ -484,7 +504,8 @@ void IslandWindow::render() {
   const float collapsed = static_cast<float>(dip_to_px(config_.collapsed_height, dpi_));
   const float expanded = static_cast<float>(dip_to_px(expanded_height(), dpi_));
   const float progress = expanded > collapsed ? std::clamp((height_.value() - collapsed) / (expanded - collapsed), 0.0f, 1.0f) : 0.0f;
-  view_.expansion=progress;view_.theme=theme_for(config_.theme_index,config_.custom_accent);
+  // A taller compact Windows notice must not expose the expanded island pages.
+  view_.expansion=(!expanded_&&view_.notice_kind==8&&!view_.notice.empty())?0.f:progress;view_.theme=theme_for(config_.theme_index,config_.custom_accent);
   if(config_.follow_system_theme) {
     DWORD light=0,size=sizeof(light);RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",L"AppsUseLightTheme",RRF_RT_REG_DWORD,nullptr,&light,&size);
     view_.theme=theme_for(light?5:0,config_.custom_accent);
@@ -509,9 +530,11 @@ void IslandWindow::set_expanded(bool expanded, bool pin) {
   KillTimer(window_, kCollapseDelay);
   expanded_ = expanded;
   const bool toast=!view_.notice.empty()&&view_.notice_kind==8;
-  planned_height_=expanded?expanded_height():toast?64:config_.collapsed_height;
+  const auto notice_size=compact_notice_size(view_.notice_app,view_.notice_title,view_.notice_body,static_cast<bool>(view_.notice_portrait));
+  planned_height_=expanded?expanded_height():toast?notice_size.height:config_.collapsed_height;
+  planned_width_=expanded?std::max(500,config_.expanded_width):toast?notice_size.width:config_.collapsed_width;
   state_ = expanded ? (pin ? State::pinned : State::expanding) : State::collapsing;
-  const float target_width = static_cast<float>(dip_to_px(expanded ? std::max(500,config_.expanded_width) : toast?420:config_.collapsed_width, dpi_));
+  const float target_width = static_cast<float>(dip_to_px(planned_width_,dpi_));
   const float target_height = static_cast<float>(dip_to_px(planned_height_, dpi_));
   float seconds=config_.animation_duration_ms/1000.f;
   if(config_.animation_style==2)seconds*=.65f;
@@ -578,7 +601,14 @@ int IslandWindow::expanded_height()const {
   const size_t count=view_.page==Page::sound?audio_.snapshot().sessions.size():view_.page==Page::tasks?google_calendar_.snapshot().tasks.size():view_.page==Page::reminders?reminders_for_day(reminders_.snapshot(),reminder_day_at_offset(reminder_now(),view_.reminder_offset),true).size():view_.page==Page::applications?apps_.snapshot().size():files_.size();
   return page_height(view_.page,count,clipboard_matches(clipboard_,view_.clipboard_query).size(),config_.clipboard_history,bluetooth)+(view_.notice.empty()?0:34);
 }
-void IslandWindow::resize_for_content(){if(expanded_&&planned_height_!=expanded_height())set_expanded(true,state_==State::pinned);else if(!expanded_&&planned_height_!=(!view_.notice.empty()&&view_.notice_kind==8?64:config_.collapsed_height))set_expanded(false);}
+void IslandWindow::resize_for_content(){
+  if(expanded_){if(planned_height_!=expanded_height())set_expanded(true,state_==State::pinned);return;}
+  const bool toast=!view_.notice.empty()&&view_.notice_kind==8;
+  const auto size=compact_notice_size(view_.notice_app,view_.notice_title,view_.notice_body,static_cast<bool>(view_.notice_portrait));
+  const int h=toast?size.height:config_.collapsed_height;
+  const int w=toast?size.width:config_.collapsed_width;
+  if(planned_height_!=h||planned_width_!=w)set_expanded(false);
+}
 void IslandWindow::update_media_animation() {
   auto snapshot=media_.snapshot();
   const bool visible=!manually_hidden_&&!hidden_for_fullscreen_&&(!expanded_||view_.page==Page::media);
@@ -676,6 +706,7 @@ void IslandWindow::activate(const HitTarget& target,float x) {
   case Action::select_task_list:select_task_list();break;
   case Action::refresh_tasks:google_calendar_.refresh();break;
   case Action::add_task:{auto g=google_calendar_.snapshot();auto list=g.task_list_id;set_expanded(true,true);task_entry_.open(instance_,window_,[this,list](std::wstring title){google_calendar_.add_task(list,std::move(title));schedule_collapse();});break;}
+  case Action::edit_task:{auto g=google_calendar_.snapshot();if(g.busy||!tasks_connected(g)||g.task_list_id!=view_.google.task_list_id)break;auto task=std::find_if(g.tasks.begin(),g.tasks.end(),[&](const auto& t){return t.id==target.key&&!t.completed;});if(task==g.tasks.end())break;auto list=g.task_list_id,id=task->id;set_expanded(true,true);task_entry_.open_edit(instance_,window_,id,task->title,[this,list,id](std::wstring title){return google_calendar_.update_task(list,id,std::move(title));});break;}
   case Action::complete_task:{for(auto& t:view_.google.tasks)if(t.id==target.key)google_calendar_.complete_task(view_.google.task_list_id,t.id,!t.completed);break;}
   case Action::delete_task:{auto g=google_calendar_.snapshot();if(g.busy||g.task_list_id!=view_.google.task_list_id)break;auto task=std::find_if(g.tasks.begin(),g.tasks.end(),[&](const auto& t){return t.id==target.key;});if(task==g.tasks.end())break;auto id=task->id,list=g.task_list_id;std::wstring text=L"“"+task->title+L"” görevi Google Tasks hesabından silinecek.\n\nSilmek istiyor musun?";menu_active_=true;int result=MessageBoxW(window_,text.c_str(),L"Görevi sil",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2);menu_active_=false;if(result==IDYES){google_calendar_.delete_task(std::move(list),std::move(id));view_.scroll=0;}schedule_collapse();break;}
   case Action::mute_output:{auto a=audio_.snapshot();audio_.mute(false,!a.muted);break;}
@@ -696,9 +727,9 @@ void IslandWindow::activate(const HitTarget& target,float x) {
 
 void IslandWindow::apply_settings() {
   if(!verification_)windows_notifications_.enable(config_.windows_notifications);
-  if(!config_.windows_notifications){windows_notice_queue_.clear();if(view_.notice_kind==8){view_.notice.clear();KillTimer(window_,kNotice);}}
-  else if(!config_.windows_notification_content&&view_.notice_kind==8){view_.notice.clear();KillTimer(window_,kNotice);}
-  if(!config_.smart_notifications){view_.notice.clear();KillTimer(window_,kNotice);}
+  if(!config_.windows_notifications){windows_notice_queue_.clear();clear_windows_notice();}
+  else if(!config_.windows_notification_content)clear_windows_notice();
+  if(!config_.smart_notifications){clear_windows_notice();view_.notice.clear();KillTimer(window_,kNotice);}
   if(expire_clipboard(clipboard_,GetTickCount64(),config_.clipboard_ttl_minutes,config_.expire_pinned_clips)){++clipboard_revision_;view_.scroll=0;}
   if(!config_.pin_on_click&&state_==State::pinned)state_=State::expanded;
   if(!verification_){UnregisterHotKey(window_,1);if(config_.hotkey_key&&!RegisterHotKey(window_,1,config_.hotkey_modifiers|MOD_NOREPEAT,config_.hotkey_key))MessageBoxW(window_,L"Kısayol kullanımda. Başka bir kombinasyon seçin.",L"NativeIsland",MB_OK|MB_ICONWARNING);}
@@ -715,23 +746,38 @@ void IslandWindow::update_clipboard() {
     while(clipboard_.size()>100||bytes()>64*1024*1024){auto old=std::find_if(clipboard_.begin(),clipboard_.end(),[](auto& clip){return !clip.pinned;});if(old==clipboard_.end())break;clipboard_.erase(old);}}
   resize_for_content();render();
 }
+void IslandWindow::clear_windows_notice(){
+  if(view_.notice_kind!=8)return;
+  view_.notice.clear();view_.notice_app.clear();view_.notice_title.clear();view_.notice_body.clear();
+  view_.notice_logo.reset();view_.notice_portrait.reset();windows_notice_app_id_.clear();
+  windows_notice_id_=0;KillTimer(window_,kNotice);
+}
 void IslandWindow::windows_notification_events(){
   if(verification_||!config_.windows_notifications)return;
   // Never expose message content on a locked/noninteractive desktop.
   bool interactive=false;HDESK desktop=OpenInputDesktop(0,FALSE,DESKTOP_READOBJECTS);
   if(desktop){wchar_t name[128]{};DWORD bytes{};interactive=GetUserObjectInformationW(desktop,UOI_NAME,name,sizeof(name),&bytes)&&_wcsicmp(name,L"Default")==0;CloseDesktop(desktop);}
-  if(!interactive){windows_notifications_.enable(false);windows_notice_queue_.clear();if(view_.notice_kind==8){view_.notice.clear();KillTimer(window_,kNotice);resize_for_content();render();}return;}
+  if(!interactive){windows_notifications_.enable(false);windows_notice_queue_.clear();if(view_.notice_kind==8){clear_windows_notice();resize_for_content();render();}return;}
   windows_notifications_.enable(true);windows_notifications_.poll();
   auto incoming=windows_notifications_.take();
   if(manually_hidden_||hidden_for_fullscreen_){windows_notice_queue_.clear();return;}
   for(auto& notice:incoming){if(windows_notice_queue_.size()==20)windows_notice_queue_.pop_front();windows_notice_queue_.push_back(std::move(notice));}
   std::erase_if(windows_notice_queue_,[this](const auto& n){return !windows_notifications_.contains(n.id);});
-  if(view_.notice_kind==8&&!view_.notice.empty()&&!windows_notifications_.contains(windows_notice_id_)){view_.notice.clear();KillTimer(window_,kNotice);resize_for_content();render();}
+  if(view_.notice_kind==8&&!view_.notice.empty()&&!windows_notifications_.contains(windows_notice_id_)){clear_windows_notice();resize_for_content();render();}
+  if(view_.notice_kind==8&&!view_.notice.empty()){
+    auto logo=windows_notifications_.logo_for(windows_notice_app_id_);
+    if(logo!=view_.notice_logo){view_.notice_logo=std::move(logo);render();}
+  }
   if(!view_.notice.empty()||windows_notice_queue_.empty())return;
-  auto item=std::move(windows_notice_queue_.front());windows_notice_queue_.pop_front();windows_notice_id_=item.id;
-  view_.notice_app=item.app;view_.notice=windows_notice_text(item,config_.windows_notification_content);view_.notice_kind=8;view_.notice_age=0;
-  notice_start_=std::chrono::steady_clock::now();notice_deadline_=notice_start_+std::chrono::seconds(6);
-  SetTimer(window_,kNotice,config_.reduced_motion?6000:16,nullptr);resize_for_content();render();
+  auto item=std::move(windows_notice_queue_.front());windows_notice_queue_.pop_front();
+  windows_notice_id_=item.id;windows_notice_app_id_=item.app_id;
+  view_.notice_logo=windows_notifications_.logo_for(windows_notice_app_id_);
+  const auto presentation=windows_notice_presentation(item,config_.windows_notification_content);
+  view_.notice_app=presentation.source;view_.notice_title=presentation.title;view_.notice_body=presentation.preview;
+  view_.notice_portrait=presentation.portrait;
+  view_.notice=view_.notice_app+L" · "+view_.notice_title;view_.notice_kind=8;view_.notice_age=0;
+  notice_start_=std::chrono::steady_clock::now();notice_deadline_=notice_start_+std::chrono::seconds(8);
+  SetTimer(window_,kNotice,config_.reduced_motion?8000:16,nullptr);resize_for_content();render();
 }
 void IslandWindow::open_reminders(){reminder_window_.open(instance_,window_,reminders_,[this]{reminder_events();resize_for_content();render();},reminder_day_at_offset(reminder_now(),view_.page==Page::reminders?view_.reminder_offset:0));}
 void IslandWindow::reminder_events(){
@@ -748,13 +794,14 @@ void IslandWindow::reminder_events(){
 void IslandWindow::show_reminder_notice(){
   if(reminder_notices_.empty())return;auto notice=std::move(reminder_notices_.front());reminder_notices_.pop_front();
   if(!manually_hidden_&&!hidden_for_fullscreen_){
+    clear_windows_notice();
     view_.notice=notice.title;view_.notice_kind=7;view_.notice_age=0;notice_start_=std::chrono::steady_clock::now();notice_deadline_=notice_start_+std::chrono::seconds(8);SetTimer(window_,kNotice,config_.reduced_motion?8000:16,nullptr);
     if(notice.summary&&!expanded_){view_.page=Page::reminders;view_.reminder_offset=0;view_.scroll=0;reminder_summary_open_=true;set_expanded(true);}
     resize_for_content();render();
   }
   if(!reminder_notices_.empty())SetTimer(window_,kReminderDelivery,8000,nullptr);
 }
-void IslandWindow::notify(std::wstring text,int kind,float value){if(verification_||!config_.smart_notifications||manually_hidden_||hidden_for_fullscreen_)return;auto now=std::chrono::steady_clock::now();if(kind==0&&!view_.notice.empty()&&view_.notice_kind!=0&&std::chrono::duration<float>(now-notice_start_).count()<.7f)return;bool merge=kind==0&&!view_.notice.empty()&&view_.notice_kind==0;view_.notice=std::move(text);view_.notice_kind=kind;view_.notice_value=value;if(!merge){view_.notice_age=0;notice_start_=now;}notice_deadline_=now+std::chrono::milliseconds(2600);SetTimer(window_,kNotice,config_.reduced_motion?2600:16,nullptr);resize_for_content();render();}
+void IslandWindow::notify(std::wstring text,int kind,float value){if(verification_||!config_.smart_notifications||manually_hidden_||hidden_for_fullscreen_)return;clear_windows_notice();auto now=std::chrono::steady_clock::now();if(kind==0&&!view_.notice.empty()&&view_.notice_kind!=0&&std::chrono::duration<float>(now-notice_start_).count()<.7f)return;bool merge=kind==0&&!view_.notice.empty()&&view_.notice_kind==0;view_.notice=std::move(text);view_.notice_kind=kind;view_.notice_value=value;if(!merge){view_.notice_age=0;notice_start_=now;}notice_deadline_=now+std::chrono::milliseconds(2600);SetTimer(window_,kNotice,config_.reduced_motion?2600:16,nullptr);resize_for_content();render();}
 void IslandWindow::smart_events(){
   auto a=audio_.snapshot();
   if(audio_baseline_){

@@ -5,6 +5,7 @@
 #include <wincodec.h>
 #include <cmath>
 #include "ui/notification_motion.hpp"
+#include "ui/notification_layout.hpp"
 
 namespace ni {
 HRESULT DCompRenderer::initialize(HWND window,UINT width,UINT height,float dpi) {
@@ -77,6 +78,60 @@ void DCompRenderer::draw_text(const std::wstring& text,const D2D1_RECT_F& rect,f
   format->SetTextAlignment(align);brush_->SetColor(color);
   context_->DrawTextW(text.c_str(),static_cast<UINT32>(text.size()),format.get(),rect,brush_.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
+void DCompRenderer::draw_notice_preview(const std::wstring& text,const D2D1_RECT_F& rect,float size,D2D1_COLOR_F color){
+  auto& format=notice_formats_[static_cast<int>(size*10)];
+  if(!format){
+    if(FAILED(dwrite_->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_MEDIUM,
+      DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,size,L"tr-TR",format.put())))return;
+    format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    format->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+    format->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM,size+6,size+1);
+    ComPtr<IDWriteInlineObject> ellipsis;
+    if(SUCCEEDED(dwrite_->CreateEllipsisTrimmingSign(format.get(),ellipsis.put()))){
+      DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_WORD,0,0};
+      format->SetTrimming(&trim,ellipsis.get());
+    }
+  }
+  format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+  brush_->SetColor(color);
+  context_->DrawTextW(text.c_str(),static_cast<UINT32>(text.size()),format.get(),rect,brush_.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
+}
+void DCompRenderer::update_notice_image(const std::shared_ptr<const std::vector<std::uint8_t>>& bytes,std::shared_ptr<const std::vector<std::uint8_t>>& source,ComPtr<ID2D1Bitmap1>& bitmap){
+  if(bytes==source)return;
+  source=bytes;bitmap.reset();
+  if(!context_||!bytes||bytes->empty()||bytes->size()>512*1024)return;
+  if(bytes->size()>=12&&(*bytes)[0]=='N'&&(*bytes)[1]=='I'&&
+     (*bytes)[2]=='R'&&(*bytes)[3]=='G'){
+    auto read_u32=[&](std::size_t i)->UINT {
+      return static_cast<UINT>((*bytes)[i])|(static_cast<UINT>((*bytes)[i+1])<<8)|
+             (static_cast<UINT>((*bytes)[i+2])<<16)|(static_cast<UINT>((*bytes)[i+3])<<24);
+    };
+    const UINT w=read_u32(4),h=read_u32(8);
+    if(w&&h&&w<=128&&h<=128&&bytes->size()==12+static_cast<std::size_t>(w)*h*4){
+      auto props=D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED));
+      context_->CreateBitmap(D2D1::SizeU(w,h),bytes->data()+12,w*4,&props,bitmap.put());
+    }
+    return;
+  }
+  ComPtr<IStream> stream;
+  stream.reset(SHCreateMemStream(reinterpret_cast<const BYTE*>(bytes->data()),static_cast<UINT>(bytes->size())));
+  if(!stream)return;
+  ComPtr<IWICImagingFactory> factory;
+  ComPtr<IWICBitmapDecoder> decoder;
+  ComPtr<IWICBitmapFrameDecode> frame;
+  ComPtr<IWICFormatConverter> converter;
+  if(FAILED(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,
+     __uuidof(IWICImagingFactory),reinterpret_cast<void**>(factory.put())))||
+     FAILED(factory->CreateDecoderFromStream(stream.get(),nullptr,WICDecodeMetadataCacheOnLoad,decoder.put()))||
+     FAILED(decoder->GetFrame(0,frame.put())))return;
+  UINT width{},height{};
+  if(FAILED(frame->GetSize(&width,&height))||!width||!height||width>512||height>512)return;
+  if(FAILED(factory->CreateFormatConverter(converter.put()))||
+     FAILED(converter->Initialize(frame.get(),GUID_WICPixelFormat32bppPBGRA,
+       WICBitmapDitherTypeNone,nullptr,0,WICBitmapPaletteTypeCustom)))return;
+  context_->CreateBitmapFromWicBitmap(converter.get(),nullptr,bitmap.put());
+}
 void DCompRenderer::box(D2D1_RECT_F rect,float radius,unsigned color,float alpha,bool outline) {
   brush_->SetColor(D2D1::ColorF(color,alpha));auto rounded=D2D1::RoundedRect(rect,radius,radius);
   if(outline)context_->DrawRoundedRectangle(rounded,brush_.get(),1);else context_->FillRoundedRectangle(rounded,brush_.get());
@@ -106,6 +161,9 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
   if(frame_ready_&&!frame_ready)WaitForSingleObjectEx(frame_ready_,50,FALSE);
   if(cached_accent_!=view.theme.accent||cached_background_!=view.theme.background){icons_.clear();cached_accent_=view.theme.accent;cached_background_=view.theme.background;}
   view_=&view;hits_.clear();context_->BeginDraw();context_->Clear(D2D1::ColorF(0,0.f));
+  const bool windows_notice=view.notice_kind==8&&!view.notice.empty();
+  update_notice_image(windows_notice?view.notice_logo:nullptr,notice_logo_source_,notice_logo_bitmap_);
+  update_notice_image(windows_notice?view.notice_portrait:nullptr,notice_portrait_source_,notice_portrait_bitmap_);
   for(auto it=clip_images_.begin();it!=clip_images_.end();)if(std::none_of(view.clipboard.begin(),view.clipboard.end(),[&](auto& entry){return entry.id==it->first;}))it=clip_images_.erase(it);else ++it;
   motion_x_=view.notice.empty()?0:notification_shake(view.notice_kind,view.notice_age,view.reduced_motion);
   context_->SetTransform(D2D1::Matrix3x2F::Translation(shadow_padding+motion_x_,shadow_padding));
@@ -114,7 +172,7 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
   for(int spread=12;spread>0;--spread) {
     float s=static_cast<float>(spread);box(D2D1::RectF(-s,-s*.45f,w+s,h+s),radius+s,0,view.shadow*.014f);
   }
-  opacity_effect_->SetOpacity(view.opacity);
+  opacity_effect_->SetOpacity(view.notice_kind==8&&!view.notice.empty()?1.f:view.opacity);
   auto shape=island_geometry(w,h,radius,view.island_shape==1);
   brush_->SetColor(D2D1::ColorF(view.theme.background));context_->FillGeometry(shape.get(),brush_.get());brush_->SetColor(D2D1::ColorF(view.theme.border));context_->DrawGeometry(shape.get(),brush_.get(),1);
   const float alpha=std::clamp(1-progress*3,0.f,1.f);
@@ -145,15 +203,52 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
     context_->PopLayer();context_->PopLayer();
   }
   if(!view.notice.empty()){
-    float fade=view.reduced_motion?1.f:std::clamp(std::min(view.notice_age/.14f,(2.6f-view.notice_age)/.25f),0.f,1.f);
-    auto layer=D2D1::LayerParameters1();layer.opacity=fade;context_->PushLayer(layer,nullptr);
-    float y=progress>.15f?h-32:1;Icon symbol=view.notice_kind==7||view.notice_kind==8?Icon::bell:view.notice_kind==1||view.notice_kind==6?Icon::microphone:view.notice_kind==2?Icon::headphones:view.notice_kind==3?Icon::battery:view.notice_kind==5?Icon::settings:Icon::volume;
-    if(progress>.15f)box(D2D1::RectF(16,y,w-16,y+27),9,view.theme.surface);
-    float pulse=!view.reduced_motion&&(view.notice_kind==2||view.notice_kind==3||view.notice_kind==6||view.notice_kind==7)?2*std::sin(std::min(view.notice_age/.4f,1.f)*3.14159f):0;
-    unsigned color=view.notice_kind==1?0xef4444:view.notice_kind==3?0xf5a524:view.theme.accent;
-    icon(symbol,20-pulse/2,y+7-pulse/2,18+pulse,color);if(view.notice_kind==1){brush_->SetColor(D2D1::ColorF(color));context_->DrawLine(D2D1::Point2F(19,y+6),D2D1::Point2F(38,y+25),brush_.get(),2);}
-    if(view.notice_kind==8&&progress<=.15f){draw_text(view.notice_app.empty()?L"Windows bildirimi":view.notice_app,D2D1::RectF(46,3,w-18,27),12,D2D1::ColorF(view.theme.accent));draw_text(view.notice,D2D1::RectF(46,27,w-18,56),11,D2D1::ColorF(view.theme.text));}
-    else draw_text(view.notice,D2D1::RectF(46,y,w-18,y+30),11,D2D1::ColorF(view.theme.text));
+    // Full text opacity for Windows notifications throughout their visibility.
+    float fade=view.notice_kind==8?1.f:(view.reduced_motion?1.f:std::clamp(std::min(view.notice_age/.14f,(2.6f-view.notice_age)/.25f),0.f,1.f));
+    auto layer=D2D1::LayerParameters1();layer.opacity=fade;layer.geometricMask=shape.get();context_->PushLayer(layer,nullptr);
+    float y=progress>.15f?h-32:1;
+    const bool compact_windows=view.notice_kind==8&&progress<=.15f;
+    if(!compact_windows){
+      Icon symbol=view.notice_kind==7||view.notice_kind==8?Icon::bell:view.notice_kind==1||view.notice_kind==6?Icon::microphone:view.notice_kind==2?Icon::headphones:view.notice_kind==3?Icon::battery:view.notice_kind==5?Icon::settings:Icon::volume;
+      if(progress>.15f)box(D2D1::RectF(16,y,w-16,y+27),9,view.theme.surface);
+      float pulse=!view.reduced_motion&&(view.notice_kind==2||view.notice_kind==3||view.notice_kind==6||view.notice_kind==7)?2*std::sin(std::min(view.notice_age/.4f,1.f)*3.14159f):0;
+      unsigned color=view.notice_kind==1?0xef4444:view.notice_kind==3?0xf5a524:view.theme.accent;
+      if(view.notice_kind==8&&notice_logo_bitmap_){
+        context_->DrawBitmap(notice_logo_bitmap_.get(),D2D1::RectF(20,y+4,41,y+25));
+      }else icon(symbol,20-pulse/2,y+7-pulse/2,18+pulse,color);
+      if(view.notice_kind==1){brush_->SetColor(D2D1::ColorF(color));context_->DrawLine(D2D1::Point2F(19,y+6),D2D1::Point2F(38,y+25),brush_.get(),2);}
+    }
+    if(compact_windows){
+      // The app logo belongs beside its name. Only a distinct portrait gets a large circle.
+      const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
+      const auto image_layout=notice_image_layout(static_cast<bool>(notice_portrait_bitmap_),static_cast<bool>(notice_logo_bitmap_));
+      if(notice_logo_bitmap_)context_->DrawBitmap(notice_logo_bitmap_.get(),D2D1::RectF(image_layout.source_left-22,14,image_layout.source_left-6,30),1.f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+      if(image_layout.portrait_visible){
+        const float avatar_y=std::max(38.f,h/2-9.f);
+        const auto avatar_rect=D2D1::RectF(18,avatar_y,58,avatar_y+40);
+        ComPtr<ID2D1EllipseGeometry> mask;
+        d2d_factory_->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(38,avatar_y+20),20,20),mask.put());
+        if(mask){auto clip=D2D1::LayerParameters1();clip.geometricMask=mask.get();context_->PushLayer(clip,nullptr);}
+        const auto size=notice_portrait_bitmap_->GetSize();const float side=std::min(size.width,size.height);
+        const auto crop=D2D1::RectF((size.width-side)/2,(size.height-side)/2,(size.width+side)/2,(size.height+side)/2);
+        if(mask)context_->DrawBitmap(notice_portrait_bitmap_.get(),avatar_rect,1.f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,crop);
+        if(mask)context_->PopLayer();
+      }
+      const float x=image_layout.text_left;
+      draw_text(source,D2D1::RectF(image_layout.source_left,12,w-34,32),11,D2D1::ColorF(view.theme.secondary));
+      constexpr float title_y=36.f;
+      draw_text(view.notice_title.empty()?L"Yeni bildirim":view.notice_title,
+                D2D1::RectF(x,title_y,w-34,title_y+24),14,D2D1::ColorF(view.theme.text));
+      if(!view.notice_body.empty()){
+        constexpr float body_y=64.f;
+        const float body_bottom=std::min(h-12.f,body_y+(h>=140.f?60.f:(h>=112.f?41.f:22.f)));
+        draw_notice_preview(view.notice_body,D2D1::RectF(x,body_y,w-34,body_bottom),
+                            13,D2D1::ColorF(view.theme.text,.9f));
+      }
+    }else if(view.notice_kind==8){
+      const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
+      draw_text(source+L" · "+(view.notice_title.empty()?L"Yeni bildirim":view.notice_title),D2D1::RectF(46,y,w-18,y+30),11,D2D1::ColorF(view.theme.text));
+    }else draw_text(view.notice,D2D1::RectF(46,y,w-18,y+30),11,D2D1::ColorF(view.theme.text));
     if(view.notice_kind==0)box(D2D1::RectF(47,y+31,47+(w-65)*view.notice_value,y+33),1,view.theme.accent);
     context_->PopLayer();
   }
@@ -181,7 +276,7 @@ HRESULT DCompRenderer::capture() {
 }
 void DCompRenderer::discard_device() {
   if(frame_ready_){CloseHandle(frame_ready_);frame_ready_=nullptr;}capacity_width_=capacity_height_=0;swap_flags_=0;
-  app_icons_.clear();file_icons_.clear();clip_images_.clear();opacity_effect_.reset();artwork_.reset();artwork_version_=0;formats_.clear();icons_.clear();svg_context_.reset();brush_.reset();
+  app_icons_.clear();file_icons_.clear();clip_images_.clear();opacity_effect_.reset();artwork_.reset();artwork_version_=0;notice_logo_bitmap_.reset();notice_logo_source_.reset();notice_portrait_bitmap_.reset();notice_portrait_source_.reset();formats_.clear();notice_formats_.clear();icons_.clear();svg_context_.reset();brush_.reset();
   if(context_)context_->SetTarget(nullptr);target_bitmap_.reset();context_.reset();swap_chain_.reset();visual_.reset();dcomp_target_.reset();dcomp_.reset();
   d2d_device_.reset();d2d_factory_.reset();dwrite_.reset();dxgi_device_.reset();d3d_.reset();
 }

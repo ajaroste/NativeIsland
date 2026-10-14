@@ -60,9 +60,11 @@ private:
   void show_reminder_notice();
   void open_reminders();
   void windows_notification_events();
+  void clear_windows_notice();
   WindowsNotifications windows_notifications_;
   std::deque<WindowsNotice> windows_notice_queue_;
   uint32_t windows_notice_id_{};
+  std::wstring windows_notice_app_id_;
   HINSTANCE instance_{}; HWND window_{}; UINT dpi_{96};
   TaskEntryWindow task_entry_;
   std::optional<HitTarget> pressed_target_;
@@ -104,7 +106,7 @@ private:
   AppLauncher apps_;
   float wave_target_{};
   bool waves_running_{};
-  int planned_height_{};
+  int planned_height_{},planned_width_{};
   std::chrono::steady_clock::time_point wave_start_{},wave_frame_{};
   int pressed_hit_{-1};
   std::chrono::steady_clock::time_point page_transition_{};

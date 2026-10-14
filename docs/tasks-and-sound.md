@@ -2,6 +2,8 @@
 
 ## Kullanım
 
+0.8.11: Silme simgesinin solundaki kalem, mevcut görev başlığını düzenler. Form mevcut başlıkla açılır; yalnızca Kaydet gönderir. Aynı anda tek görev formu açılır; tekrar tıklama ikinci pencere açmaz veya açık formun kimliğini/metnini değiştirmez. Güncelleme mevcut görev kimliğine PATCH yapar; yeni görev oluşturmaz, not/tarih/tamamlanma alanlarını değiştirmez. Kaydet sırasında tekrar gönderim ve aynı görevin kuyruktaki yinelenen düzenleme isteği engellenir. Değişiklik yoksa istek gönderilmez. Başarısız kuyruklama formu açık tutar; belirsiz ağ sonucu otomatik tekrar gönderilmez.
+
 Ana ses ayrı vurgu rengi ve çerçeveli karttır. Uygulama satırlarının yıldızına tıklayarak favori seçilir/kaldırılır. Favori uygulamanın ses oturumu varsa başa alınır; kapalı uygulamalar listeye eklenmez. Favoriler kullanıcı klasöründeki `audio-favorites.json` dosyasında tutulur ve yeniden başlatma/güncellemelerde korunur. Kimliği okunamayan korumalı ses oturumlarında yıldız devre dışıdır. 0.8.4 ile dışarıdaki yan düğme kaldırıldı; görevler ana panelde çanın sağındaki liste ikonundan açılır. Bağlantı Ayarlar → Google Tasks üzerinden yapılır.
 
 - Ayarlar → Görünüm → Ada biçimi: Kapsül veya Damla. Damla seçilince üst boşluk görsel olarak sıfırlanır; kapsüle dönünce eski boşluk ayarı geri kullanılır.

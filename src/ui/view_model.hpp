@@ -9,13 +9,15 @@
 #include <d2d1.h>
 #include <vector>
 #include <string>
+#include <memory>
+#include <cstdint>
 
 namespace ni {
 inline constexpr int shadow_padding=16;
 enum class Page { widgets, files, media, clipboard, applications, reminders, sound, tasks };
 enum class Action { tab, settings, previous, play, next, seek, reveal_file, remove_file,
                     copy_clip, remove_clip, toggle_clip, clear_clip, scroll_up, scroll_down,
-                    drag_file, add_app, launch_app, remove_app, preview_clip, pin_clip,search_clips,volume,mute_output,mute_mic,select_output,sound_settings,manage_reminders,complete_reminder,reminder_day,session_volume,session_mute,add_task,complete_task,select_task_list,refresh_tasks,favorite_audio,delete_task };
+                    drag_file, add_app, launch_app, remove_app, preview_clip, pin_clip,search_clips,volume,mute_output,mute_mic,select_output,sound_settings,manage_reminders,complete_reminder,reminder_day,session_volume,session_mute,add_task,complete_task,select_task_list,refresh_tasks,favorite_audio,delete_task,edit_task };
 struct HitTarget { D2D1_RECT_F rect; Action action; size_t index{}; bool enabled{true};std::wstring key; };
 struct ViewModel {
   AudioSnapshot audio;
@@ -28,7 +30,9 @@ struct ViewModel {
   bool has_today_reminders{};
   std::wstring calendar_status;
   std::wstring clipboard_query,notice;
-  std::wstring notice_app;
+  std::wstring notice_app,notice_title,notice_body;
+  std::shared_ptr<const std::vector<std::uint8_t>> notice_logo;
+  std::shared_ptr<const std::vector<std::uint8_t>> notice_portrait;
   std::vector<size_t> clipboard_indices;
   int notice_kind{};
   float notice_age{},notice_value{};

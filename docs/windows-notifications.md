@@ -1,4 +1,14 @@
-# Windows bildirimlerini adada gösterme — 0.7.8
+# Windows bildirimlerini adada gösterme — 0.8.10
+
+0.8.10: Uygulama adı, gönderen/başlık ve mesaj aynı sol metin sütunundadır. Logo bu sütunun hemen solunda kalır; asenkron ikon yüklenmesi metni kaydırmaz. Daha küçük kaynak satırı, belirgin başlık ve sabit mesaj satır aralığı kullanılır. Sağ kenarda yuvarlak kapsül/damla köşeleri için güvenli iç boşluk bırakılır.
+
+## Güncel görsel davranışı
+
+Uygulama logosu, uygulama adının yanında küçük ikon olarak gösterilir. Büyük profil dairesi yalnızca **ayrı ve çözümlenebilir kişi/bildirim görseli** sağlandığında çizilir; görsel yoksa veya bozuksa daire, harf rozeti ve ona ayrılmış metin boşluğu gösterilmez. Uygulama logosu profil fotoğrafı yerine kullanılmaz. Ayrı görsel, daire içinde ortalanıp kırpılır; içerik gizleme açıkken gösterilmez ve bildirim bittiğinde RAM'den bırakılır.
+
+**API sınırı:** Mevcut Windows UserNotificationListener / NotificationBinding API'si metin öğeleri ve AppInfo üzerinden uygulama logosuna erişir; bildirim içindeki image/appLogoOverride veya WhatsApp kişi fotoğrafını okuyacak bir yöntem sağlamaz. Bu nedenle Windows bildiriminde fotoğraf görünmesi, NativeIsland'ın bu API üzerinden aynı fotoğrafı alabileceği anlamına gelmez. Bu sürüm canlı WhatsApp fotoğrafı aktarımı eklemez. Ayrı görsel alanı renderer ve veri modelinde hazırdır; otomatik aktarım için ayrıca yetkili bir veri kaynağı gerekir. Tarayıcı önbelleği, WhatsApp hesabı veya Windows bildirim veritabanı taranmaz; uzak fotoğraflar indirilmez.
+
+Bu bölüm aşağıdaki tarihsel rozet açıklamasının yerine geçer. Yerel renderer testlerinde ikonsuz, yalnızca uygulama ikonlu, ayrı görselli ve bozuk görselli senaryolar yapay test verisiyle doğrulanır; bunlar gerçek WhatsApp kişi fotoğrafı testi değildir.
 
 ## Kullanım
 
@@ -6,9 +16,9 @@ Başlat menüsündeki NativeIsland paketini açın. Eski taşınabilir EXE aynı
 
 Ayarlar → Bildirimler → Windows bildirimlerini adada göster seçeneğini açın. Erişim izni ver düğmesini kullanıp Windows izin ekranını onaylayın. Ayarlardaki durum satırı erişimin başarılı olup olmadığını gösterir. İzin reddedilirse Windows uygulama gizlilik ayarlarından tekrar verilmesi gerekir.
 
-Yeni bir WhatsApp veya başka bir uygulama bildirimi geldiğinde ada kısa süre genişler; uygulama/başlık/içerik gösterir ve 6 saniye sonra eski boyutuna döner. Sıradaki bildirim gösterilmeden önce adadaki diğer kısa bildirimlerin bitmesi beklenir. Ada açıksa içerik alt bildirim satırına gelir; sekme değiştirilmez.
+Herhangi bir uygulamadan Windows bildirim merkezine ulaşan yeni bildirim geldiğinde ada içeriğe göre 336–500 DIP genişliğinde kompakt kart görünümüne geçer; kısa bildirimde gereksiz boşluk bırakmadan, uzun mesajda iki veya üç satırlık önizleme alanı kullanarak Windows'un bildirdiği kaynak uygulamayı, bildirim başlığını ve varsa mesaj önizlemesini ayrı satırlarda gösterir ve 8 saniye sonra eski boyutuna döner. Sıradaki bildirim gösterilmeden önce adadaki diğer kısa bildirimlerin bitmesi beklenir. Ada açıksa içerik alt bildirim satırına gelir; sekme değiştirilmez.
 
-Windows bildirimleri silinmez, uygulamalar açılmaz, mesajlara cevap gönderilmez. Windows bildirim merkezine ulaşmayan uygulama-içi mesajlar okunamaz. Başlangıçtaki eski bildirimler tekrar gösterilmez. Windows'ta kaldırılan bildirimler kuyruktan çıkarılır.
+Bildirim kaynağı Windows'un verdiği uygulama adıdır: Chrome/Vivaldi/Edge üzerinden gelen web bildirimleri otomatik olarak WhatsApp veya başka bir hizmet diye sınıflandırılmaz. Windows uygulama kimliği izin verdiğinde gerçek uygulama logosu asenkron olarak RAM'e yüklenir. Klasik Win32 uygulamalarında AUMID boş olsa bile uygulama adıyla önbellekleme yapılır; WinRT logo boş veya çözümlenemez biçimde dönerse HKCR AppUserModelId IconUri, Shell AppsFolder ve yalnızca eşleşen çalışan EXE yolu denenir; 5 dakikalık aralıklı tekrar deneme uygulanır; bunlar da başarısızsa kaynak baş harfiyle nötr rozet gösterilir. Windows UserNotification/NotificationBinding dinleyicisi ayrı profil fotoğrafı öğelerini güvenilir biçimde sunmadığından kişiye ait avatar bu sürümde otomatik alınmaz; kompakt kartta ikinci bir genel çan simgesi çizilmez. Damla ve kapsül ayarlarında aynı okunabilir yerleşim kullanılır. Bildirim metinleri 12/15/13 DIP boyutunda yüksek kontrastla çizilir ve bildirim boyunca opaklık tamdır. Bildirimde desteklenmeyen Yanıtla, Ertele veya Aç eylemleri gösterilmez. Windows bildirimleri silinmez, uygulamalar açılmaz, mesajlara cevap gönderilmez. Windows bildirim merkezine ulaşmayan uygulama-içi mesajlar okunamaz. Başlangıçtaki eski bildirimler tekrar gösterilmez. Windows'ta kaldırılan bildirimler kuyruktan çıkarılır.
 
 ## Gizlilik
 

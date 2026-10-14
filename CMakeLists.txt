@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(NativeIsland VERSION 0.8.7 LANGUAGES CXX RC)
+project(NativeIsland VERSION 0.8.11 LANGUAGES CXX RC)
 
 if(NOT WIN32)
   message(FATAL_ERROR "NativeIsland only supports Windows 10/11")
@@ -27,6 +27,7 @@ add_executable(NativeIsland WIN32
   src/services/audio_service.cpp
   src/services/reminders.cpp
   src/services/windows_notifications.cpp
+  src/services/notification_icon_resolver.cpp
   src/services/google_calendar.cpp
   src/ui/reminder_window.cpp
 )
@@ -43,7 +44,7 @@ target_link_libraries(NativeIsland PRIVATE
 
 include(CTest)
 if(BUILD_TESTING)
-  add_executable(NativeIslandTests tests/test_core.cpp src/core/config.cpp src/services/app_launcher.cpp src/services/reminders.cpp src/services/google_calendar.cpp src/services/windows_notifications.cpp)
+  add_executable(NativeIslandTests tests/test_core.cpp src/core/config.cpp src/services/app_launcher.cpp src/services/reminders.cpp src/services/google_calendar.cpp src/services/windows_notifications.cpp src/services/notification_icon_resolver.cpp)
   target_include_directories(NativeIslandTests PRIVATE src)
   target_compile_definitions(NativeIslandTests PRIVATE UNICODE _UNICODE NOMINMAX)
   target_compile_definitions(NativeIslandTests PRIVATE NI_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
