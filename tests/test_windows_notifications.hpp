@@ -1,6 +1,9 @@
 #pragma once
 #include "services/windows_notifications.hpp"
 #include "ui/notification_layout.hpp"
+#include "services/notification_icon_resolver.hpp"
+#include <windows.h>
+#include <filesystem>
 inline int windows_notification_tests(){
   ni::NotificationDelta delta;ni::WindowsNotice old{1,100,L"WhatsApp",L"Eski",L"Mesaj"},fresh{2,101,L"WhatsApp",L"Emir",L"Merhaba"};
   if(!delta.update({old}).empty())return 60;
@@ -31,6 +34,18 @@ inline int windows_notification_tests(){
   if(ni::notification_icon_key(L"Foo.AUMID",L"Vivaldi")!=L"Foo.AUMID")return 76;
   if(ni::notification_icon_key(L"",L"Vivaldi")!=L"@desktop:Vivaldi")return 77;
   if(!ni::notification_icon_key(L"",L"").empty())return 78;
+  // Integration smoke test: extract and decode the icon of this very process.
+  // This executes the real Win32 process and shell fallback on the CI machine.
+  wchar_t self[MAX_PATH]{};
+  if(!GetModuleFileNameW(nullptr,self,MAX_PATH))return 79;
+  auto image=ni::notification_shell_icon(L"",std::filesystem::path(self).filename().wstring());
+  if(image.size()<12||image[0]!='N'||image[1]!='I'||image[2]!='R'||image[3]!='G')return 80;
+  auto u32=[&](size_t at)->std::uint32_t {
+    return std::uint32_t(image[at])|(std::uint32_t(image[at+1])<<8)|
+           (std::uint32_t(image[at+2])<<16)|(std::uint32_t(image[at+3])<<24);
+  };
+  auto w=u32(4),h=u32(8);
+  if(w==0||h==0||w>128||h>128||image.size()!=12+static_cast<size_t>(w)*h*4)return 81;
   auto config=ni::Config::parse("{\"windowsNotifications\":true,\"windowsNotificationContent\":false}");if(!config.windows_notifications||config.windows_notification_content||ni::Config{}.windows_notifications)return 67;
   return 0;
 }
