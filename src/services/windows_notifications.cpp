@@ -55,6 +55,9 @@ WindowsNoticePresentation windows_notice_presentation(const WindowsNotice& notic
   if(result.source.empty())result.source=L"Windows";
   result.title=L"Yeni bildirim";
   if(show_content){
+    // A separately supplied notification portrait is private content, not the app logo.
+    // UserNotificationListener currently has no API for reading toast image elements.
+    if(notice.portrait&&notice.portrait->size()<=512*1024)result.portrait=notice.portrait;
     auto title=cleaned_text(notice.title,160);
     auto body=cleaned_text(notice.body,240);
     if(title.empty()&&!body.empty()){title=std::move(body);body.clear();}

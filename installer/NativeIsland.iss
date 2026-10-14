@@ -4,7 +4,7 @@
 [Setup]
 AppName=NativeIsland
 AppId=NativeIsland
-AppVersion=0.8.7
+AppVersion=0.8.11
 DefaultDirName={localappdata}\Programs\NativeIsland
 PrivilegesRequired=lowest
 DefaultGroupName=NativeIsland

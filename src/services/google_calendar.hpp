@@ -3,11 +3,21 @@
 #include <thread>
 #include <condition_variable>
 #include <functional>
+#include <set>
 namespace ni {
 struct GoogleCalendarInfo {std::wstring id,name;bool selected{};};
 struct GoogleTask {std::wstring id,title,notes,due;bool completed{};};
 struct GoogleTaskList {std::wstring id,name;};
-enum class TaskOperation {add,complete,remove};
+enum class TaskOperation {add,complete,remove,edit};
+class TaskEditGate {
+public:
+  bool acquire(const std::wstring& list,const std::wstring& id){return !list.empty()&&!id.empty()&&pending_.emplace(list,id).second;}
+  bool contains(const std::wstring& list,const std::wstring& id)const{return pending_.contains({list,id});}
+  void release(const std::wstring& list,const std::wstring& id){pending_.erase({list,id});}
+  void clear(){pending_.clear();}
+private:
+  std::set<std::pair<std::wstring,std::wstring>> pending_;
+};
 struct TaskRequest {std::wstring method,path;std::string body;};
 TaskRequest google_task_request(TaskOperation operation,const std::wstring& list,const std::wstring& id={},const std::wstring& title={},bool completed=true);
 inline std::vector<size_t> pending_task_indices(const std::vector<GoogleTask>& tasks){std::vector<size_t> indices;for(size_t i=0;i<tasks.size();++i)if(!tasks[i].completed)indices.push_back(i);return indices;}
@@ -38,6 +48,7 @@ public:
   void add_task(std::wstring list,std::wstring title);
   void complete_task(std::wstring list,std::wstring id,bool completed);
   void delete_task(std::wstring list,std::wstring id);
+  bool update_task(std::wstring list,std::wstring id,std::wstring title);
   void disconnect();
   void refresh();
   void select(std::vector<std::wstring> ids);
@@ -55,6 +66,7 @@ private:
   std::vector<std::wstring> selected_;
   struct TaskCommand {std::wstring list,id,title;bool completed{};TaskOperation operation{TaskOperation::add};};
   std::vector<TaskCommand> task_commands_;
+  TaskEditGate task_edit_gate_;
   std::wstring task_selection_;
   bool authorize_tasks_{};
 };

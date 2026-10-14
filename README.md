@@ -30,7 +30,7 @@ Get-FileHash .\NativeIsland-Kurulum.exe -Algorithm SHA256
 - Uygulama kısayolları ve dört sütunlu ikon görünümü.
 - İsteğe bağlı metin/görsel pano geçmişi, arama, sabitleme ve otomatik temizleme.
 - Yerel hatırlatıcılar, Dün/Bugün/Yarın geçişi; isteğe bağlı Google Takvim ve Google Tasks.
-- Görev listesi çanın yanındaki ikondan açılır. Tamamlananlar gizlidir; yalnızca **Ekle** düğmesi yeni görev gönderir. **×**, onaydan sonra görevi Google Tasks hesabından siler.
+- Görev listesi çanın yanındaki ikondan açılır. Tamamlananlar gizlidir; yalnızca **Ekle** düğmesi yeni görev gönderir. **Kalem** mevcut başlığı düzenler; yalnızca **Kaydet** günceller, yeni kopya oluşturmaz. **×**, onaydan sonra görevi Google Tasks hesabından siler.
 - İsteğe bağlı Windows bildirimlerini kısa süreli adada gösterme; ayrı erişim izni gerekir.
 - Monitör seçimi, yatay konum, Windows başlangıcında açılma ve gizle/göster kısayolu.
 
@@ -66,4 +66,4 @@ Yerel otomatik testler ve renderer önizlemeleri doğrulanır. Her Windows/DPI/d
 
 ## Son değişiklikler
 
-0.8.7: Public dağıtım için statik Visual C++ runtime ve paket lisansları. Son UI değişiklikleri: tam **Uygulamalar** etiketi; çan yanındaki görev sekmesi; tamamlanan görevleri gizleme; yazarken yanlışlıkla ekleme hatasının düzeltilmesi; onaylı görev silme. [Geliştirme geçmişi](docs/CHANGELOG.md).
+0.8.11: Görev başlığını kalem ikonuyla düzenleme; tek düzenleme penceresi ve yinelenen gönderim koruması. Windows bildirimlerinde gerçek uygulama ikonu uygulama adının yanında, başlık ve mesaj aynı sol hizadadır. Fotoğraf yoksa büyük avatar dairesi çizilmez. Mevcut Windows bildirim API'si WhatsApp kişi fotoğrafını sağlamadığından otomatik profil fotoğrafı aktarımı desteklenmez. Ayrıntılar: [0.8.11 sürüm notları](docs/release-0.8.11.md), [geliştirme geçmişi](docs/CHANGELOG.md).

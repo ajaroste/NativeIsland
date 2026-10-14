@@ -76,7 +76,9 @@ TaskRequest google_task_request(TaskOperation operation,const std::wstring& list
   result.path=L"/tasks/v1/lists/"+encoded(list)+L"/tasks";
   if(operation!=TaskOperation::add)result.path+=L"/"+encoded(id);
   if(operation==TaskOperation::remove){result.method=L"DELETE";return result;}
-  JsonObject body;result.method=operation==TaskOperation::add?L"POST":L"PATCH";body.Insert(operation==TaskOperation::add?L"title":L"status",JsonValue::CreateStringValue(operation==TaskOperation::add?title:completed?L"completed":L"needsAction"));result.body=winrt::to_string(body.Stringify());return result;
+  const bool title_update=operation==TaskOperation::add||operation==TaskOperation::edit;
+  if(title_update&&(title.empty()||title.size()>1024))throw std::invalid_argument("task title");
+  JsonObject body;result.method=operation==TaskOperation::add?L"POST":L"PATCH";body.Insert(title_update?L"title":L"status",JsonValue::CreateStringValue(title_update?title:completed?L"completed":L"needsAction"));result.body=winrt::to_string(body.Stringify());return result;
 }
 GoogleCalendarStatus GoogleCalendarService::snapshot()const{std::scoped_lock lock(mutex_);return status_;}
 void GoogleCalendarService::start(ReminderStore& store,std::function<void()> changed,bool enabled){store_=&store;changed_=std::move(changed);if(enabled)worker_=std::jthread([this](std::stop_token stop){
@@ -89,6 +91,12 @@ void GoogleCalendarService::select_task_list(std::wstring id){std::scoped_lock l
 void GoogleCalendarService::add_task(std::wstring list,std::wstring title){if(title.empty()||title.size()>1024||list.empty())return;std::scoped_lock lock(mutex_);if(task_commands_.size()>=32)return;task_commands_.push_back({std::move(list),{},std::move(title),false});cv_.notify_one();}
 void GoogleCalendarService::complete_task(std::wstring list,std::wstring id,bool done){if(list.empty()||id.empty())return;std::scoped_lock lock(mutex_);if(task_commands_.size()>=32)return;task_commands_.push_back({std::move(list),std::move(id),{},done,TaskOperation::complete});cv_.notify_one();}
 void GoogleCalendarService::delete_task(std::wstring list,std::wstring id){if(list.empty()||id.empty())return;std::scoped_lock lock(mutex_);if(task_commands_.size()>=32)return;task_commands_.push_back({std::move(list),std::move(id),{},false,TaskOperation::remove});cv_.notify_one();}
+bool GoogleCalendarService::update_task(std::wstring list,std::wstring id,std::wstring title){
+  if(list.empty()||id.empty()||title.empty()||title.size()>1024)return false;
+  std::scoped_lock lock(mutex_);if(!worker_.joinable()||!tasks_connected(status_)||status_.busy||status_.task_list_id!=list||std::none_of(status_.tasks.begin(),status_.tasks.end(),[&](const auto& task){return task.id==id&&!task.completed;})||task_commands_.size()>=32||!task_edit_gate_.acquire(list,id))return false;
+  try{task_commands_.push_back({list,id,std::move(title),false,TaskOperation::edit});}catch(...){task_edit_gate_.release(list,id);throw;}
+  status_.busy=true;status_.tasks_message=L"Görev kaydediliyor…";cv_.notify_one();if(changed_)changed_();return true;
+}
 void GoogleCalendarService::disconnect(){std::scoped_lock lock(mutex_);disconnect_=true;cv_.notify_one();}
 void GoogleCalendarService::refresh(){std::scoped_lock lock(mutex_);refresh_=true;cv_.notify_one();}
 void GoogleCalendarService::select(std::vector<std::wstring> ids){std::scoped_lock lock(mutex_);selected_=std::move(ids);selection_pending_=true;cv_.notify_one();}
@@ -127,6 +135,10 @@ void GoogleCalendarService::run(std::stop_token stop){
             if(chosen!=std::wstring(vault.GetNamedString(L"task_list",L""))){vault.Insert(L"task_list",JsonValue::CreateStringValue(chosen));vault_save(vault);}
             for(auto& c:task_commands){if(stop.stop_requested())break;auto mutation=google_task_request(c.operation,c.list,c.id,c.title,c.completed);auto response=request(L"tasks.googleapis.com",mutation.path,mutation.method.c_str(),mutation.body,access,true);
               if(c.operation!=TaskOperation::remove||response.status<200||response.status>=300)json_response(response);
+              if(c.operation==TaskOperation::edit){
+                {std::scoped_lock lock(mutex_);if(status_.task_list_id==c.list)for(auto& task:status_.tasks)if(task.id==c.id)task.title=c.title;if(changed_)changed_();}
+                if(vault.GetNamedString(L"task_list",L"")==c.list){auto cache=vault.GetNamedObject(L"tasks_cache",JsonObject{});for(auto item:cache.GetNamedArray(L"items",JsonArray{})){auto task=item.GetObject();if(task.GetNamedString(L"id",L"")==c.id)task.Insert(L"title",JsonValue::CreateStringValue(c.title));}vault_save(vault);}
+              }
               // Only remove locally after Google confirms the mutation, even if the following list refresh fails.
               if(c.operation==TaskOperation::remove||(c.operation==TaskOperation::complete&&c.completed)){
                 {std::scoped_lock lock(mutex_);if(status_.task_list_id==c.list)std::erase_if(status_.tasks,[&](const auto& task){return task.id==c.id;});if(changed_)changed_();}
@@ -154,6 +166,7 @@ void GoogleCalendarService::run(std::stop_token stop){
       }
     }catch(const std::exception& e){std::string code=e.what();std::wstring message=code=="expired"?L"Google izni sona erdi. JSON dosyasıyla yeniden bağlanın.":code=="permission"?L"Google Takvim API veya okuma izni eksik. Kurulum yönergesini kontrol edin.":code=="denied"?L"Google yetkilendirmesi iptal edildi.":code=="timeout"?L"Google yetkilendirme süresi doldu. Yeniden deneyin.":code=="vault"?L"Google bağlantı verisi kaydedilemedi veya kaldırılamadı.":code=="store"?store_->error():L"Google bağlantısı başarısız. Ağ ve OAuth Masaüstü JSON dosyasını kontrol edin.";publish(std::move(message),false);
     }catch(...){publish(L"Google yanıtı veya istemci JSON dosyası geçersiz. Önceki etkinlikler korundu.",false);}
+    {std::scoped_lock lock(mutex_);for(const auto& command:task_commands)if(command.operation==TaskOperation::edit)task_edit_gate_.release(command.list,command.id);if(disconnect)task_edit_gate_.clear();}
     next=std::chrono::steady_clock::now()+std::chrono::minutes(5);
   }
 }

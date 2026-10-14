@@ -29,8 +29,14 @@ inline int windows_notification_tests(){
   if(hidden.height!=76||hidden.width<336)return 73;
   const auto long_notice=ni::compact_notice_size(L"WhatsApp",L"Arkadaş",std::wstring(220,L'x'));
   if(long_notice.height!=142||long_notice.width>500)return 74;
-  const auto two_lines=ni::compact_notice_size(L"Vivaldi",L"Bir mesaj",std::wstring(62,L'x'));
+  const auto two_lines=ni::compact_notice_size(L"Vivaldi",L"Bir mesaj",std::wstring(62,L'x'),true);
   if(two_lines.height!=120)return 75;
+  auto text_only=ni::notice_image_layout(false,false),app_only=ni::notice_image_layout(false,true),with_portrait=ni::notice_image_layout(true,true);
+  if(text_only.text_left!=56||text_only.source_left!=text_only.text_left||text_only.portrait_visible||app_only.text_left!=56||app_only.source_left!=app_only.text_left||app_only.portrait_visible||with_portrait.text_left!=76||with_portrait.source_left!=with_portrait.text_left||!with_portrait.portrait_visible)return 82;
+  auto no_photo=ni::compact_notice_size(L"Vivaldi",L"Bir mesaj",std::wstring(62,L'x'));if(no_photo.width>=two_lines.width)return 83;
+  ni::WindowsNotice portrait_notice=fresh;portrait_notice.portrait=std::make_shared<const std::vector<std::uint8_t>>(16,std::uint8_t{});
+  if(ni::windows_notice_presentation(portrait_notice,false).portrait||ni::windows_notice_presentation(portrait_notice,true).portrait!=portrait_notice.portrait)return 84;
+  portrait_notice.portrait=std::make_shared<const std::vector<std::uint8_t>>(512*1024+1,std::uint8_t{});if(ni::windows_notice_presentation(portrait_notice,true).portrait)return 85;
   if(ni::notification_icon_key(L"Foo.AUMID",L"Vivaldi")!=L"Foo.AUMID")return 76;
   if(ni::notification_icon_key(L"",L"Vivaldi")!=L"@desktop:Vivaldi")return 77;
   if(!ni::notification_icon_key(L"",L"").empty())return 78;

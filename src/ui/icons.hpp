@@ -1,9 +1,9 @@
 #pragma once
 #include <array>
 namespace ni {
-enum class Icon { grid, files, music, clipboard, settings, cpu, gpu, ram, disk, network, previous, play, pause, next, close, reveal, plus, bluetooth, volume, microphone, battery, pin, headphones, bell, check, tasks };
+enum class Icon { grid, files, music, clipboard, settings, cpu, gpu, ram, disk, network, previous, play, pause, next, close, reveal, plus, bluetooth, volume, microphone, battery, pin, headphones, bell, check, tasks, pencil };
 // Lucide vector geometry, bundled locally. See assets/LUCIDE-LICENSE.txt.
-inline constexpr std::array<const char*,26> icon_shapes{{
+inline constexpr std::array<const char*,27> icon_shapes{{
   "<rect x='3' y='3' width='7' height='7' rx='1'/><rect x='14' y='3' width='7' height='7' rx='1'/><rect x='3' y='14' width='7' height='7' rx='1'/><rect x='14' y='14' width='7' height='7' rx='1'/>",
   "<path d='M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8'/><path d='M15 2v5a1 1 0 0 0 1 1h5L15 2'/><path d='M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8'/>",
   "<path d='M9 18V5l12-2v13'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='16' r='3'/>",
@@ -29,6 +29,7 @@ inline constexpr std::array<const char*,26> icon_shapes{{
   "<path d='M3 14v-3a9 9 0 0 1 18 0v3'/><rect x='3' y='12' width='4' height='9' rx='2'/><rect x='17' y='12' width='4' height='9' rx='2'/>",
   "<path d='M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4'/>",
   "<path d='m5 12 4 4L19 6'/>",
-  "<path d='m3 6 2 2 4-4M13 6h8m-18 9 2 2 4-4M13 15h8M13 20h8'/>"
+  "<path d='m3 6 2 2 4-4M13 6h8m-18 9 2 2 4-4M13 15h8M13 20h8'/>",
+  "<path d='m16 3 5 5M3 21l5-1L21 7l-4-4L4 16z'/>"
 }};
 }

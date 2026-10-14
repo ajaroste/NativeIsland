@@ -14,7 +14,7 @@
 #include <chrono>
 
 namespace ni {
-struct WindowsNotice {uint32_t id{};int64_t created{};std::wstring app,title,body,app_id;};
+struct WindowsNotice {uint32_t id{};int64_t created{};std::wstring app,title,body,app_id;std::shared_ptr<const std::vector<std::uint8_t>> portrait;};
 // A legacy Win32 notification can have a display name but no AUMID.
 inline std::wstring notification_icon_key(const std::wstring& app_id,const std::wstring& display_name){
   if(!app_id.empty())return app_id;
@@ -28,7 +28,7 @@ struct NoticeLogoCache {
 };
 // Source is the Windows-reported application identity, never an inferred web service.
 // Text is display-only: the notification listener cannot promise reply/open actions.
-struct WindowsNoticePresentation {std::wstring source,title,preview;};
+struct WindowsNoticePresentation {std::wstring source,title,preview;std::shared_ptr<const std::vector<std::uint8_t>> portrait;};
 WindowsNoticePresentation windows_notice_presentation(const WindowsNotice& notice,bool show_content);
 // No notification content is persisted. Initial history is only a baseline.
 class NotificationDelta {

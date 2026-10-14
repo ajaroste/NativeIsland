@@ -1,4 +1,14 @@
-# Windows bildirimlerini adada gösterme — 0.7.8
+# Windows bildirimlerini adada gösterme — 0.8.10
+
+0.8.10: Uygulama adı, gönderen/başlık ve mesaj aynı sol metin sütunundadır. Logo bu sütunun hemen solunda kalır; asenkron ikon yüklenmesi metni kaydırmaz. Daha küçük kaynak satırı, belirgin başlık ve sabit mesaj satır aralığı kullanılır. Sağ kenarda yuvarlak kapsül/damla köşeleri için güvenli iç boşluk bırakılır.
+
+## Güncel görsel davranışı
+
+Uygulama logosu, uygulama adının yanında küçük ikon olarak gösterilir. Büyük profil dairesi yalnızca **ayrı ve çözümlenebilir kişi/bildirim görseli** sağlandığında çizilir; görsel yoksa veya bozuksa daire, harf rozeti ve ona ayrılmış metin boşluğu gösterilmez. Uygulama logosu profil fotoğrafı yerine kullanılmaz. Ayrı görsel, daire içinde ortalanıp kırpılır; içerik gizleme açıkken gösterilmez ve bildirim bittiğinde RAM'den bırakılır.
+
+**API sınırı:** Mevcut Windows UserNotificationListener / NotificationBinding API'si metin öğeleri ve AppInfo üzerinden uygulama logosuna erişir; bildirim içindeki image/appLogoOverride veya WhatsApp kişi fotoğrafını okuyacak bir yöntem sağlamaz. Bu nedenle Windows bildiriminde fotoğraf görünmesi, NativeIsland'ın bu API üzerinden aynı fotoğrafı alabileceği anlamına gelmez. Bu sürüm canlı WhatsApp fotoğrafı aktarımı eklemez. Ayrı görsel alanı renderer ve veri modelinde hazırdır; otomatik aktarım için ayrıca yetkili bir veri kaynağı gerekir. Tarayıcı önbelleği, WhatsApp hesabı veya Windows bildirim veritabanı taranmaz; uzak fotoğraflar indirilmez.
+
+Bu bölüm aşağıdaki tarihsel rozet açıklamasının yerine geçer. Yerel renderer testlerinde ikonsuz, yalnızca uygulama ikonlu, ayrı görselli ve bozuk görselli senaryolar yapay test verisiyle doğrulanır; bunlar gerçek WhatsApp kişi fotoğrafı testi değildir.
 
 ## Kullanım
 

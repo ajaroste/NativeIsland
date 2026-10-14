@@ -5,6 +5,7 @@
 #include <wincodec.h>
 #include <cmath>
 #include "ui/notification_motion.hpp"
+#include "ui/notification_layout.hpp"
 
 namespace ni {
 HRESULT DCompRenderer::initialize(HWND window,UINT width,UINT height,float dpi) {
@@ -84,6 +85,7 @@ void DCompRenderer::draw_notice_preview(const std::wstring& text,const D2D1_RECT
       DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,size,L"tr-TR",format.put())))return;
     format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
     format->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+    format->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM,size+6,size+1);
     ComPtr<IDWriteInlineObject> ellipsis;
     if(SUCCEEDED(dwrite_->CreateEllipsisTrimmingSign(format.get(),ellipsis.put()))){
       DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_WORD,0,0};
@@ -94,9 +96,9 @@ void DCompRenderer::draw_notice_preview(const std::wstring& text,const D2D1_RECT
   brush_->SetColor(color);
   context_->DrawTextW(text.c_str(),static_cast<UINT32>(text.size()),format.get(),rect,brush_.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
-void DCompRenderer::update_notice_logo(const std::shared_ptr<const std::vector<std::uint8_t>>& bytes){
-  if(bytes==notice_logo_source_)return;
-  notice_logo_source_=bytes;notice_logo_bitmap_.reset();
+void DCompRenderer::update_notice_image(const std::shared_ptr<const std::vector<std::uint8_t>>& bytes,std::shared_ptr<const std::vector<std::uint8_t>>& source,ComPtr<ID2D1Bitmap1>& bitmap){
+  if(bytes==source)return;
+  source=bytes;bitmap.reset();
   if(!context_||!bytes||bytes->empty()||bytes->size()>512*1024)return;
   if(bytes->size()>=12&&(*bytes)[0]=='N'&&(*bytes)[1]=='I'&&
      (*bytes)[2]=='R'&&(*bytes)[3]=='G'){
@@ -108,7 +110,7 @@ void DCompRenderer::update_notice_logo(const std::shared_ptr<const std::vector<s
     if(w&&h&&w<=128&&h<=128&&bytes->size()==12+static_cast<std::size_t>(w)*h*4){
       auto props=D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE,
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED));
-      context_->CreateBitmap(D2D1::SizeU(w,h),bytes->data()+12,w*4,&props,notice_logo_bitmap_.put());
+      context_->CreateBitmap(D2D1::SizeU(w,h),bytes->data()+12,w*4,&props,bitmap.put());
     }
     return;
   }
@@ -128,7 +130,7 @@ void DCompRenderer::update_notice_logo(const std::shared_ptr<const std::vector<s
   if(FAILED(factory->CreateFormatConverter(converter.put()))||
      FAILED(converter->Initialize(frame.get(),GUID_WICPixelFormat32bppPBGRA,
        WICBitmapDitherTypeNone,nullptr,0,WICBitmapPaletteTypeCustom)))return;
-  context_->CreateBitmapFromWicBitmap(converter.get(),nullptr,notice_logo_bitmap_.put());
+  context_->CreateBitmapFromWicBitmap(converter.get(),nullptr,bitmap.put());
 }
 void DCompRenderer::box(D2D1_RECT_F rect,float radius,unsigned color,float alpha,bool outline) {
   brush_->SetColor(D2D1::ColorF(color,alpha));auto rounded=D2D1::RoundedRect(rect,radius,radius);
@@ -159,6 +161,9 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
   if(frame_ready_&&!frame_ready)WaitForSingleObjectEx(frame_ready_,50,FALSE);
   if(cached_accent_!=view.theme.accent||cached_background_!=view.theme.background){icons_.clear();cached_accent_=view.theme.accent;cached_background_=view.theme.background;}
   view_=&view;hits_.clear();context_->BeginDraw();context_->Clear(D2D1::ColorF(0,0.f));
+  const bool windows_notice=view.notice_kind==8&&!view.notice.empty();
+  update_notice_image(windows_notice?view.notice_logo:nullptr,notice_logo_source_,notice_logo_bitmap_);
+  update_notice_image(windows_notice?view.notice_portrait:nullptr,notice_portrait_source_,notice_portrait_bitmap_);
   for(auto it=clip_images_.begin();it!=clip_images_.end();)if(std::none_of(view.clipboard.begin(),view.clipboard.end(),[&](auto& entry){return entry.id==it->first;}))it=clip_images_.erase(it);else ++it;
   motion_x_=view.notice.empty()?0:notification_shake(view.notice_kind,view.notice_age,view.reduced_motion);
   context_->SetTransform(D2D1::Matrix3x2F::Translation(shadow_padding+motion_x_,shadow_padding));
@@ -199,9 +204,8 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
   }
   if(!view.notice.empty()){
     // Full text opacity for Windows notifications throughout their visibility.
-    update_notice_logo(view.notice_kind==8?view.notice_logo:nullptr);
     float fade=view.notice_kind==8?1.f:(view.reduced_motion?1.f:std::clamp(std::min(view.notice_age/.14f,(2.6f-view.notice_age)/.25f),0.f,1.f));
-    auto layer=D2D1::LayerParameters1();layer.opacity=fade;context_->PushLayer(layer,nullptr);
+    auto layer=D2D1::LayerParameters1();layer.opacity=fade;layer.geometricMask=shape.get();context_->PushLayer(layer,nullptr);
     float y=progress>.15f?h-32:1;
     const bool compact_windows=view.notice_kind==8&&progress<=.15f;
     if(!compact_windows){
@@ -215,36 +219,31 @@ HRESULT DCompRenderer::render(const SystemSnapshot& system,const MediaSnapshot& 
       if(view.notice_kind==1){brush_->SetColor(D2D1::ColorF(color));context_->DrawLine(D2D1::Point2F(19,y+6),D2D1::Point2F(38,y+25),brush_.get(),2);}
     }
     if(compact_windows){
-      // Application icon takes precedence over the letter fallback.
+      // The app logo belongs beside its name. Only a distinct portrait gets a large circle.
       const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
-      const float avatar=40.f;
-      const float avatar_y=std::max(12.f,(h-avatar)*.5f);
-      const auto avatar_rect=D2D1::RectF(12,avatar_y,52,avatar_y+avatar);
-      box(avatar_rect,13,view.theme.accent_soft);
-      if(notice_logo_bitmap_){
-        ComPtr<ID2D1RoundedRectangleGeometry> mask;
-        d2d_factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(avatar_rect,12,12),mask.put());
+      const auto image_layout=notice_image_layout(static_cast<bool>(notice_portrait_bitmap_),static_cast<bool>(notice_logo_bitmap_));
+      if(notice_logo_bitmap_)context_->DrawBitmap(notice_logo_bitmap_.get(),D2D1::RectF(image_layout.source_left-22,14,image_layout.source_left-6,30),1.f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+      if(image_layout.portrait_visible){
+        const float avatar_y=std::max(38.f,h/2-9.f);
+        const auto avatar_rect=D2D1::RectF(18,avatar_y,58,avatar_y+40);
+        ComPtr<ID2D1EllipseGeometry> mask;
+        d2d_factory_->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(38,avatar_y+20),20,20),mask.put());
         if(mask){auto clip=D2D1::LayerParameters1();clip.geometricMask=mask.get();context_->PushLayer(clip,nullptr);}
-        context_->DrawBitmap(notice_logo_bitmap_.get(),D2D1::RectF(16,avatar_y+4,48,avatar_y+36),
-                             1.f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+        const auto size=notice_portrait_bitmap_->GetSize();const float side=std::min(size.width,size.height);
+        const auto crop=D2D1::RectF((size.width-side)/2,(size.height-side)/2,(size.width+side)/2,(size.height+side)/2);
+        if(mask)context_->DrawBitmap(notice_portrait_bitmap_.get(),avatar_rect,1.f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,crop);
         if(mask)context_->PopLayer();
-      }else{
-        const wchar_t initial=source.empty()?L'\0':source.front();
-        if((initial>=L'A'&&initial<=L'Z')||(initial>=L'a'&&initial<=L'z')||(initial>=L'0'&&initial<=L'9')){
-          const wchar_t upper=initial>=L'a'&&initial<=L'z'?static_cast<wchar_t>(initial-L'a'+L'A'):initial;
-          draw_text(std::wstring(1,upper),avatar_rect,17,D2D1::ColorF(view.theme.text),DWRITE_TEXT_ALIGNMENT_CENTER);
-        }else icon(Icon::bell,24,avatar_y+12,16,view.theme.text);
       }
-      constexpr float x=65.f;
-      draw_text(source,D2D1::RectF(x,10,w-18,30),12,D2D1::ColorF(view.theme.accent));
-      const float title_y=view.notice_body.empty()?34.f:31.f;
+      const float x=image_layout.text_left;
+      draw_text(source,D2D1::RectF(image_layout.source_left,12,w-34,32),11,D2D1::ColorF(view.theme.secondary));
+      constexpr float title_y=36.f;
       draw_text(view.notice_title.empty()?L"Yeni bildirim":view.notice_title,
-                D2D1::RectF(x,title_y,w-18,title_y+25),15,D2D1::ColorF(view.theme.text));
+                D2D1::RectF(x,title_y,w-34,title_y+24),14,D2D1::ColorF(view.theme.text));
       if(!view.notice_body.empty()){
-        constexpr float body_y=59.f;
-        const float body_bottom=std::min(h-12.f,body_y+(h>=140.f?69.f:(h>=112.f?47.f:25.f)));
-        draw_notice_preview(view.notice_body,D2D1::RectF(x,body_y,w-18,body_bottom),
-                            13,D2D1::ColorF(view.theme.text,.94f));
+        constexpr float body_y=64.f;
+        const float body_bottom=std::min(h-12.f,body_y+(h>=140.f?60.f:(h>=112.f?41.f:22.f)));
+        draw_notice_preview(view.notice_body,D2D1::RectF(x,body_y,w-34,body_bottom),
+                            13,D2D1::ColorF(view.theme.text,.9f));
       }
     }else if(view.notice_kind==8){
       const auto& source=view.notice_app.empty()?std::wstring(L"Windows"):view.notice_app;
@@ -277,7 +276,7 @@ HRESULT DCompRenderer::capture() {
 }
 void DCompRenderer::discard_device() {
   if(frame_ready_){CloseHandle(frame_ready_);frame_ready_=nullptr;}capacity_width_=capacity_height_=0;swap_flags_=0;
-  app_icons_.clear();file_icons_.clear();clip_images_.clear();opacity_effect_.reset();artwork_.reset();artwork_version_=0;notice_logo_bitmap_.reset();notice_logo_source_.reset();formats_.clear();notice_formats_.clear();icons_.clear();svg_context_.reset();brush_.reset();
+  app_icons_.clear();file_icons_.clear();clip_images_.clear();opacity_effect_.reset();artwork_.reset();artwork_version_=0;notice_logo_bitmap_.reset();notice_logo_source_.reset();notice_portrait_bitmap_.reset();notice_portrait_source_.reset();formats_.clear();notice_formats_.clear();icons_.clear();svg_context_.reset();brush_.reset();
   if(context_)context_->SetTarget(nullptr);target_bitmap_.reset();context_.reset();swap_chain_.reset();visual_.reset();dcomp_target_.reset();dcomp_.reset();
   d2d_device_.reset();d2d_factory_.reset();dwrite_.reset();dxgi_device_.reset();d3d_.reset();
 }
